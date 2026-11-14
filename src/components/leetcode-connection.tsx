@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircle2, Loader2, RefreshCw, TriangleAlert } from "lucide-react";
+import { CheckCircle2, Copy, Loader2, RefreshCw, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -70,9 +70,26 @@ export function LeetCodeConnection() {
       )}
 
       {connection.connected && syncStatus.error && !syncStatus.running && (
-        <div className="flex items-start gap-2 rounded-lg bg-hard/10 p-3 text-sm text-hard ring-1 ring-hard/20">
-          <TriangleAlert className="mt-0.5 size-4 shrink-0" />
-          <span>{syncStatus.error}</span>
+        <div className="flex flex-col gap-2 rounded-lg bg-hard/10 p-3 text-sm text-hard ring-1 ring-hard/20">
+          <div className="flex items-start gap-2">
+            <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+            <span className="min-w-0 flex-1 font-medium">{syncStatus.error.split("\n")[0]}</span>
+          </div>
+          {syncStatus.error.includes("\n") && (
+            <pre className="max-h-40 overflow-auto rounded-md bg-background/60 p-2 font-mono text-xs break-words whitespace-pre-wrap text-foreground">
+              {syncStatus.error.split("\n").slice(1).join("\n").trim()}
+            </pre>
+          )}
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="self-start"
+            onClick={() => navigator.clipboard?.writeText(syncStatus.error ?? "")}
+          >
+            <Copy data-icon="inline-start" />
+            Copy error
+          </Button>
         </div>
       )}
 

@@ -54,7 +54,12 @@ export function StatusBanner() {
   if (connection.connected && syncStatus.error) {
     return (
       <Strip tone="warn" icon={<TriangleAlert className="size-4" />}>
-        <span className="min-w-0 flex-1 truncate">Sync failed: {syncStatus.error}</span>
+        <span className="min-w-0 flex-1 truncate">
+          Sync failed: {syncStatus.error.split("\n")[0]}
+        </span>
+        <Button size="sm" variant="outline" onClick={() => openSettings("leetcode")}>
+          Details
+        </Button>
         <Button size="sm" variant="outline" onClick={() => sync("incremental")}>
           Retry
         </Button>

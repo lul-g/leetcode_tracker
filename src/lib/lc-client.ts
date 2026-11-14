@@ -40,7 +40,7 @@ export const solvedPage = (c: Cookie, skip: number) =>
   call<{ slugs: string[]; total: number }>("solved", { ...c, skip });
 
 export const submissionsFor = (c: Cookie, slug: string) =>
-  call<{ subs: Sub[] }>("submissions", { ...c, slug });
+  call<{ subs: Sub[]; note: string | null }>("submissions", { ...c, slug });
 
 export const recentAccepted = (username: string, limit: number) =>
   call<{ recent: { slug: string; t: number }[] }>("recent", { username, limit });

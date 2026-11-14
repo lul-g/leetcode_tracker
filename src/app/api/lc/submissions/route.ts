@@ -6,6 +6,6 @@ export function POST(req: Request) {
   return handle(req, async (body) => {
     const slug = (body as { slug?: unknown }).slug;
     if (!isSlug(slug)) throw new BadRequest("Bad problem.");
-    return { subs: await fetchSubmissions(cookieFrom(body), slug) };
+    return fetchSubmissions(cookieFrom(body), slug);
   });
 }

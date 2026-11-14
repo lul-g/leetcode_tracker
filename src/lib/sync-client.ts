@@ -79,13 +79,17 @@ export async function runSync(mode: SyncMode, report: Report): Promise<void> {
   const next: Record<string, Sub[]> = { ...stored };
   let done = 0;
   let emptyFetches = 0;
+  let firstNote: string | null = null;
   let sinceSave = 0;
   const queue = [...todo];
   const worker = async () => {
     for (let slug = queue.shift(); slug; slug = queue.shift()) {
-      const { subs } = await submissionsFor(cookie, slug);
+      const { subs, note } = await submissionsFor(cookie, slug);
       // LeetCode says it is solved, so at least one submission should exist
-      if (subs.length === 0) emptyFetches++;
+      if (subs.length === 0) {
+        emptyFetches++;
+        firstNote ??= `${slug}: ${note ?? "empty list"}`;
+      }
       next[slug] = subs;
       done++;
       report({ done });
@@ -103,8 +107,12 @@ export async function runSync(mode: SyncMode, report: Report): Promise<void> {
 
   if (todo.length > 0 && emptyFetches === todo.length) {
     throw new Error(
-      "LeetCode lists problems as solved but returned no submissions for any of them. " +
-        "Paste a fresh LEETCODE_SESSION, or paste your whole Cookie header.",
+      `LeetCode says you've solved ${solved.length} problems, but it didn't hand over any of ` +
+        "the submissions when asked. Your history is fine; this is about how the request is " +
+        "sent. Reconnect with your csrftoken filled in, or paste your whole Cookie header." +
+        (firstNote ? `
+
+What LeetCode sent back (${firstNote})` : ""),
     );
   }
 

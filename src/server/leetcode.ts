@@ -187,8 +187,12 @@ const parseRuntime = (s: string) => {
 };
 
 /** All of the user's submissions to one problem, oldest first. */
-export async function fetchSubmissions(cookie: Cookie, slug: string): Promise<Sub[]> {
+export async function fetchSubmissions(
+  cookie: Cookie,
+  slug: string,
+): Promise<{ subs: Sub[]; note: string | null }> {
   const out: Sub[] = [];
+  let firstReply = "";
   const LIMIT = 20;
   let lastKey: string | null = null;
   for (let offset = 0; offset < 2000; offset += LIMIT) {
@@ -198,6 +202,7 @@ export async function fetchSubmissions(cookie: Cookie, slug: string): Promise<Su
       cookie,
       { referer: `https://leetcode.com/problems/${slug}/submissions/` },
     );
+    if (offset === 0) firstReply = JSON.stringify(raw).slice(0, 400);
     const page = raw.data?.questionSubmissionList;
     // A solved problem always has submissions, so a null list means LeetCode didn't accept the
     // request. Pass on its explanation, or the raw reply, so the cause is visible in the app.
@@ -221,7 +226,11 @@ export async function fetchSubmissions(cookie: Cookie, slug: string): Promise<Su
     lastKey = page.lastKey;
     await sleep(100);
   }
-  return out.sort((a, b) => a.t - b.t);
+  // an empty list for a solved problem is suspicious: hand back LeetCode's exact reply
+  return {
+    subs: out.sort((a, b) => a.t - b.t),
+    note: out.length === 0 ? `LeetCode replied: ${firstReply}` : null,
+  };
 }
 
 /** The user's most recent accepted submissions (public, capped by `limit`). */
