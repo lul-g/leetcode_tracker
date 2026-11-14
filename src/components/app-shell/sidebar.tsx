@@ -12,6 +12,7 @@ import { useApp } from "@/lib/app-context";
 import { timeAgo } from "@/lib/time-ago";
 import { cn } from "@/lib/utils";
 import { NAV, useActive } from "./nav";
+import { SidebarConnect } from "./sidebar-connect";
 
 /* collapsed state persists per device (a convenience, not data) */
 const KEY = "lc-tracker-sidebar-collapsed";
@@ -182,6 +183,7 @@ export function Sidebar() {
       </div>
 
       <div className="flex flex-col gap-0.5 border-t p-3">
+        {!collapsed && <SidebarConnect />}
         {withTip(
           syncLabel,
           <button
@@ -189,6 +191,7 @@ export function Sidebar() {
             onClick={onSync}
             disabled={syncing}
             aria-label={collapsed ? syncLabel : "Sync with LeetCode"}
+            title="Sync with LeetCode now"
             className={cn(itemClass, "w-full", collapsed && "justify-center px-0")}
           >
             <RefreshCw

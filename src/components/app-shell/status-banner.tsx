@@ -21,6 +21,8 @@ export function StatusBanner() {
   } = useApp();
 
   if (syncStatus.running) {
+    // automatic background syncs only show in the sidebar
+    if (syncStatus.auto) return null;
     return (
       <Strip tone="info" icon={<Loader2 className="size-4 animate-spin" />}>
         <span className="min-w-0 flex-1 truncate">

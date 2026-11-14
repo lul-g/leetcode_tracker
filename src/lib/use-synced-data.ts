@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { whoami, ClientAuthError } from "@/lib/lc-client";
 import {
   KEYS,
+  loadMeta,
   useStoreReady,
   useStored,
   writeStore,
@@ -29,6 +30,7 @@ const IDLE: SyncStatus = {
   total: 0,
   error: null,
   authError: false,
+  auto: false,
 };
 
 /**
@@ -47,6 +49,11 @@ export function parseCookies(input: string) {
 
 const NO_SUBS: Record<string, Sub[]> = {};
 
+/** an automatic sync runs when the last one is older than this */
+const AUTO_STALE_AFTER = 10 * 60 * 1000;
+/** and never more often than this, even if a sync keeps failing */
+const AUTO_MIN_GAP = 60 * 1000;
+
 /**
  * The synced LeetCode data (kept in this browser), the sync status, and the actions on them.
  * Syncing runs in the page; see lib/sync-client.ts.
@@ -59,29 +66,58 @@ export function useSyncedData() {
   const meta = useStored<StoredMeta>(KEYS.meta, { lastSyncedAt: null });
   const [status, setStatus] = useState<SyncStatus>(IDLE);
   const running = useRef(false);
+  const lastAttempt = useRef(0);
+  const needsNewCookie = useRef(false);
 
   const records = useMemo<ProblemRecord[]>(
     () => buildRecords(subs, catalog?.entries ?? {}),
     [subs, catalog],
   );
 
-  const sync = useCallback(async (mode: SyncMode = "incremental") => {
+  const sync = useCallback(async (mode: SyncMode = "incremental", auto = false) => {
     if (running.current) return;
     running.current = true;
-    setStatus({ ...IDLE, running: true, mode, phase: "Starting" });
+    lastAttempt.current = Date.now();
+    setStatus({ ...IDLE, running: true, mode, phase: "Starting", auto });
     try {
       await runSync(mode, (patch) => setStatus((s) => ({ ...s, ...patch })));
+      needsNewCookie.current = false;
       setStatus({ ...IDLE });
     } catch (e) {
+      const authError = e instanceof ClientAuthError;
+      needsNewCookie.current = authError;
       setStatus({
         ...IDLE,
         error: e instanceof Error ? e.message : String(e),
-        authError: e instanceof ClientAuthError,
+        authError,
       });
     } finally {
       running.current = false;
     }
   }, []);
+
+  // Pull new solves by itself: when the app opens and whenever you come back to the tab,
+  // if the last sync is more than a few minutes old. It never retries an expired cookie.
+  const connected = !!creds;
+  useEffect(() => {
+    if (!ready || !connected) return;
+    const maybeSync = () => {
+      if (document.visibilityState !== "visible" || running.current) return;
+      if (needsNewCookie.current) return;
+      const now = Date.now();
+      if (now - lastAttempt.current < AUTO_MIN_GAP) return;
+      const last = loadMeta().lastSyncedAt;
+      if (last !== null && now - last < AUTO_STALE_AFTER) return;
+      void sync("incremental", true);
+    };
+    maybeSync();
+    document.addEventListener("visibilitychange", maybeSync);
+    window.addEventListener("focus", maybeSync);
+    return () => {
+      document.removeEventListener("visibilitychange", maybeSync);
+      window.removeEventListener("focus", maybeSync);
+    };
+  }, [ready, connected, sync]);
 
   /** Save a cookie after LeetCode confirms it. Resolves to an error message, or null on success. */
   const connect = useCallback(
@@ -94,6 +130,7 @@ export function useSyncedData() {
         if (!writeStore(KEYS.credentials, { session, csrf: csrf || undefined, username })) {
           return "Your browser wouldn't save the cookie (storage blocked).";
         }
+        needsNewCookie.current = false;
         void sync("incremental"); // pull the history straight away
         return null;
       } catch (e) {

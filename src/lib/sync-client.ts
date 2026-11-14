@@ -57,7 +57,9 @@ export async function runSync(mode: SyncMode, report: Report): Promise<void> {
   if (mode === "full") {
     todo = solved;
   } else {
-    const changed = new Set(solved.filter((s) => !stored[s]));
+    // A solved problem must have an accepted submission. Treating "nothing stored" and "stored
+    // but empty or without an accept" the same also repairs data saved by an earlier bad sync.
+    const changed = new Set(solved.filter((s) => !stored[s]?.some((x) => x.ok)));
     const { recent } = await recentAccepted(username, RECENT);
     for (const r of recent) {
       const newest = stored[r.slug]?.reduce((m, s) => Math.max(m, s.t), 0) ?? 0;

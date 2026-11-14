@@ -66,4 +66,6 @@ export type SyncStatus = {
   error: string | null;
   /** true when LeetCode rejected the cookie, so the UI asks for a new one */
   authError: boolean;
+  /** started by the app itself (on open or tab focus) rather than by a click: stays quiet */
+  auto: boolean;
 };

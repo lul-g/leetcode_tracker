@@ -64,11 +64,40 @@ export function LeetCodeConnection() {
                   : "Not synced yet"}
             </p>
             {!syncStatus.running && syncSummary && (
-              <p className="mt-1 text-xs text-muted-foreground">
-                LeetCode lists {syncSummary.solvedOnLeetCode} solved ·{" "}
-                <span className="text-foreground">{problems.length}</span> count toward your goal
-                (accepted since {settings.startDate})
-              </p>
+              <div className="mt-2 space-y-0.5 text-xs text-muted-foreground">
+                <p>
+                  LeetCode lists{" "}
+                  <span className="text-foreground">{syncSummary.solvedOnLeetCode}</span> solved,{" "}
+                  <span className="text-foreground">{syncSummary.withAccepted}</span> downloaded
+                  with an accepted submission
+                </p>
+                <p>
+                  <span className="text-foreground">{problems.length}</span> count toward your
+                  goal (accepted on or after {settings.startDate})
+                  {syncSummary.withAccepted > problems.length && (
+                    <>
+                      ,{" "}
+                      <span className="text-foreground">
+                        {syncSummary.withAccepted - problems.length}
+                      </span>{" "}
+                      are older than that
+                    </>
+                  )}
+                </p>
+                {syncSummary.newestAcceptedAt && (
+                  <p>
+                    Most recent accepted submission:{" "}
+                    <span className="text-foreground">
+                      {new Date(syncSummary.newestAcceptedAt * 1000).toLocaleString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                  </p>
+                )}
+              </div>
             )}
             {syncStatus.running && syncStatus.total > 0 && (
               <Progress
