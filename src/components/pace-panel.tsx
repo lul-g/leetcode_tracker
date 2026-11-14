@@ -92,7 +92,7 @@ export function PacePanel({ solves, settings, onSettings, today, difficulty }: P
   const early = pace.projectedVsTarget;
 
   return (
-    <Card className="h-full">
+    <Card className="@container h-full">
       <CardHeader className="shrink-0">
         <CardTitle className="text-sm font-semibold">Pace</CardTitle>
         <CardDescription>
@@ -155,7 +155,7 @@ export function PacePanel({ solves, settings, onSettings, today, difficulty }: P
 
         <Separator />
 
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 gap-2 @2xl:grid-cols-4">
           <Stat
             label="Solved"
             value={`${pace.solved}/${settings.goal}`}

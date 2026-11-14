@@ -5,7 +5,12 @@ import { DashboardGrid } from "@/components/dashboard-grid";
 import { DifficultyRing } from "@/components/difficulty-ring";
 import { ListSwitcher } from "@/components/list-switcher";
 import { Logo } from "@/components/logo";
+import { HeatmapCard } from "@/components/heatmap-card";
 import { PacePanel } from "@/components/pace-panel";
+import { RangeCard } from "@/components/range-card";
+import { StreakCalendarCard } from "@/components/streak-calendar-card";
+import { TodayCard } from "@/components/today-card";
+import { TopicsCard } from "@/components/topics-card";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -177,23 +182,60 @@ export function Dashboard() {
     </Card>
   );
 
-  const pace = today ? (
+  // The sticky difficulty filter narrows every card that shows activity. Goal math
+  // (pace, today) always uses all difficulties, since the goal counts them all.
+  const filtered = selected
+    ? DEMO_SOLVES.filter((s) => s.difficulty === selected)
+    : DEMO_SOLVES;
+
+  // `today` is only known after mount, so cards that need it show a skeleton first.
+  const ready = (render: (today: string) => React.ReactNode) =>
+    today ? render(today) : <Skeleton className="h-full w-full rounded-xl" />;
+
+  const pace = ready((t) => (
     <PacePanel
       solves={DEMO_SOLVES}
       settings={settings}
       onSettings={update}
-      today={today}
+      today={t}
       difficulty={selected}
     />
-  ) : (
-    <Skeleton className="h-full w-full rounded-xl" />
-  );
+  ));
+  const todayCard = ready((t) => (
+    <TodayCard solves={DEMO_SOLVES} settings={settings} today={t} />
+  ));
+  const range = ready((t) => (
+    <RangeCard
+      solves={filtered}
+      startDate={settings.startDate}
+      today={t}
+      difficulty={selected}
+    />
+  ));
+  const calendar = ready((t) => (
+    <StreakCalendarCard solves={filtered} startDate={settings.startDate} today={t} />
+  ));
+  const heatmap = ready((t) => (
+    <HeatmapCard solves={filtered} startDate={settings.startDate} today={t} />
+  ));
+  const topics = ready((t) => (
+    <TopicsCard solves={filtered} startDate={settings.startDate} today={t} />
+  ));
 
   return (
     <main className="mx-auto w-full max-w-6xl p-4 sm:p-6">
       <DashboardGrid
         toolbar={<Logo />}
-        cards={{ hero, pace, problems: problemsCard }}
+        cards={{
+          hero,
+          pace,
+          today: todayCard,
+          range,
+          calendar,
+          heatmap,
+          problems: problemsCard,
+          topics,
+        }}
       />
     </main>
   );

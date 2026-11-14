@@ -1,7 +1,7 @@
 import type { Difficulty } from "@/lib/data";
 
 /** A solve counts on the local calendar day of its first accepted submission. */
-export type Solve = { date: string; difficulty: Difficulty }; // date: YYYY-MM-DD
+export type Solve = { date: string; difficulty: Difficulty; topic?: string }; // date: YYYY-MM-DD
 
 export type GoalSettings = {
   goal: number;

@@ -31,7 +31,7 @@ import { cn } from "@/lib/utils";
 
 type Item = { id: string; w: number; h: number };
 
-const KEY = "lc-tracker-layout";
+const KEY = "lc-tracker-layout-v2";
 const EVENT = "lc-tracker-layout-change";
 const COLS = 12;
 const ROW = 64; // px per height unit
@@ -41,9 +41,14 @@ const MIN_H = 3;
 const MAX_H = 14;
 
 export const DEFAULT_LAYOUT: Item[] = [
-  { id: "hero", w: 5, h: 6 },
-  { id: "pace", w: 7, h: 11 },
-  { id: "problems", w: 5, h: 5 },
+  { id: "hero", w: 4, h: 6 },
+  { id: "pace", w: 8, h: 9 },
+  { id: "today", w: 4, h: 3 },
+  { id: "range", w: 8, h: 7 },
+  { id: "calendar", w: 4, h: 7 },
+  { id: "heatmap", w: 12, h: 4 },
+  { id: "problems", w: 6, h: 6 },
+  { id: "topics", w: 6, h: 6 },
 ];
 
 const clamp = (n: number, lo: number, hi: number) =>
