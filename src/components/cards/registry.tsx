@@ -25,7 +25,7 @@ export type CardDef = {
  * (pace, today) always uses all difficulties, since the goal counts them all.
  */
 export function useCards(): Record<string, CardDef> {
-  const { settings, today, solves, difficulty, setSettingsOpen } = useApp();
+  const { settings, today, solves, difficulty, openSettings } = useApp();
   const filtered = difficulty ? solves.filter((s) => s.difficulty === difficulty) : solves;
 
   // `today` is only known after mount, so cards that need it show a skeleton first.
@@ -45,7 +45,7 @@ export function useCards(): Record<string, CardDef> {
         <PacePanel
           solves={solves}
           settings={settings}
-          onEditGoal={() => setSettingsOpen(true)}
+          onEditGoal={() => openSettings("goal")}
           today={t}
           difficulty={difficulty}
         />

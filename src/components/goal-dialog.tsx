@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 import { DatePicker } from "@/components/date-picker";
+import { LeetCodeConnection } from "@/components/leetcode-connection";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import type { SettingsTab } from "@/lib/app-context";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -23,26 +26,44 @@ import type { GoalSettings } from "@/lib/pace";
 export function SettingsDialog({
   open,
   onOpenChange,
+  tab,
+  onTabChange,
   settings,
   onSave,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  tab: SettingsTab;
+  onTabChange: (tab: SettingsTab) => void;
   settings: GoalSettings;
   onSave: (s: GoalSettings) => void;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-sm">
-        {/* remount on open so the form always starts from the saved values */}
-        {open && (
-          <GoalForm
-            settings={settings}
-            onSave={(s) => {
-              onSave(s);
-              onOpenChange(false);
-            }}
-          />
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Settings</DialogTitle>
+          <DialogDescription>Your goal and your LeetCode connection.</DialogDescription>
+        </DialogHeader>
+        <Tabs value={tab} onValueChange={(v) => onTabChange(v as SettingsTab)}>
+          <TabsList className="w-full">
+            <TabsTrigger value="goal">Goal</TabsTrigger>
+            <TabsTrigger value="leetcode">LeetCode</TabsTrigger>
+          </TabsList>
+        </Tabs>
+        {tab === "goal" ? (
+          // remount on open so the form always starts from the saved values
+          open && (
+            <GoalForm
+              settings={settings}
+              onSave={(s) => {
+                onSave(s);
+                onOpenChange(false);
+              }}
+            />
+          )
+        ) : (
+          <LeetCodeConnection />
         )}
       </DialogContent>
     </Dialog>
@@ -73,13 +94,6 @@ function GoalForm({
         if (valid) onSave({ goal: goalN, startDate: start, targetDate: target });
       }}
     >
-      <DialogHeader>
-        <DialogTitle>Your goal</DialogTitle>
-        <DialogDescription>
-          Change these any time; every stat recomputes instantly.
-        </DialogDescription>
-      </DialogHeader>
-
       <FieldGroup>
         <Field data-invalid={!goalOk}>
           <FieldLabel htmlFor="goal">Problems to solve</FieldLabel>

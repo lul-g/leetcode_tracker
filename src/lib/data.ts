@@ -47,22 +47,6 @@ export const LISTS: ProblemList[] = [
     totals: { easy: 28, medium: 101, hard: 21 },
     solved: { easy: 3, medium: 2, hard: 0 },
   },
-  {
-    id: "nc250",
-    name: "NeetCode 250",
-    emoji: "🦄",
-    bar: "#ef4743",
-    totals: { easy: 40, medium: 160, hard: 50 },
-    solved: { easy: 3, medium: 2, hard: 0 },
-  },
-  {
-    id: "ncall",
-    name: "NeetCode All",
-    emoji: "🌍",
-    bar: "#3b82f6",
-    totals: { easy: 80, medium: 220, hard: 70 },
-    solved: { easy: 3, medium: 2, hard: 0 },
-  },
 ];
 
 export const DEFAULT_GOAL = 1200;

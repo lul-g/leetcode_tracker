@@ -3,12 +3,13 @@
 import { useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { PanelLeft, Settings } from "lucide-react";
+import { PanelLeft, RefreshCw, Settings } from "lucide-react";
 import { LogoMark, APP_NAME } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useApp } from "@/lib/app-context";
+import { timeAgo } from "@/lib/time-ago";
 import { cn } from "@/lib/utils";
 import { NAV, useActive } from "./nav";
 
@@ -47,7 +48,30 @@ export function Sidebar() {
   const collapsed = useCollapsed();
   const isActive = useActive();
   const router = useRouter();
-  const { lists, listId, setListId, setSettingsOpen, settings } = useApp();
+  const {
+    lists,
+    listId,
+    setListId,
+    openSettings,
+    settings,
+    isDemo,
+    connection,
+    syncStatus,
+    sync,
+  } = useApp();
+  const syncing = syncStatus.running;
+  const syncLabel = syncing
+    ? syncStatus.total
+      ? `Syncing ${syncStatus.done}/${syncStatus.total}`
+      : "Syncing…"
+    : !connection.connected
+      ? isDemo
+        ? "Demo data · connect"
+        : "Not connected"
+      : connection.lastSyncedAt
+        ? `Synced ${timeAgo(connection.lastSyncedAt)}`
+        : "Not synced yet";
+  const onSync = () => (connection.connected ? sync("incremental") : openSettings("leetcode"));
 
   const withTip = (label: string, node: React.ReactElement) =>
     collapsed ? (
@@ -157,12 +181,28 @@ export function Sidebar() {
         )}
       </div>
 
-      <div className="border-t p-3">
+      <div className="flex flex-col gap-0.5 border-t p-3">
+        {withTip(
+          syncLabel,
+          <button
+            type="button"
+            onClick={onSync}
+            disabled={syncing}
+            aria-label={collapsed ? syncLabel : "Sync with LeetCode"}
+            className={cn(itemClass, "w-full", collapsed && "justify-center px-0")}
+          >
+            <RefreshCw
+              className={cn("size-5 shrink-0", syncing && "animate-spin")}
+              strokeWidth={1.8}
+            />
+            {!collapsed && <span className="truncate text-sm">{syncLabel}</span>}
+          </button>,
+        )}
         {withTip(
           "Settings",
           <button
             type="button"
-            onClick={() => setSettingsOpen(true)}
+            onClick={() => openSettings()}
             aria-label={collapsed ? "Settings" : undefined}
             className={cn(itemClass, "w-full", collapsed && "justify-center px-0")}
           >

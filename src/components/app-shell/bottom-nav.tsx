@@ -9,7 +9,7 @@ import { NAV, useActive } from "./nav";
 /** Phone-only tab bar (the sidebar takes over from md up). Respects the iOS home indicator. */
 export function BottomNav() {
   const isActive = useActive();
-  const { setSettingsOpen } = useApp();
+  const { openSettings } = useApp();
   const tab =
     "flex min-w-0 flex-1 flex-col items-center justify-center gap-1 px-1 py-2 text-[10.5px] font-semibold text-muted-foreground transition-colors active:scale-95";
 
@@ -33,7 +33,7 @@ export function BottomNav() {
             </Link>
           );
         })}
-        <button type="button" onClick={() => setSettingsOpen(true)} className={tab}>
+        <button type="button" onClick={() => openSettings()} className={tab}>
           <Settings className="size-[22px]" strokeWidth={1.8} />
           <span>Settings</span>
         </button>
