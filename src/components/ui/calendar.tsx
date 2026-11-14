@@ -42,7 +42,7 @@ function CalendarDropdown({
       <SelectTrigger
         size="sm"
         aria-label={ariaLabel}
-        className="h-7 gap-1 border-transparent bg-transparent px-2 font-medium shadow-none hover:bg-muted dark:bg-transparent dark:hover:bg-muted"
+        className="h-8 gap-1.5 border-input bg-muted/40 px-2.5 font-medium text-foreground shadow-none hover:bg-muted dark:bg-muted/40 dark:hover:bg-muted [&_svg]:text-foreground/70"
       >
         <SelectValue>
           {options?.find((o) => String(o.value) === String(value))?.label}
