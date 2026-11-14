@@ -24,14 +24,17 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { RotateCcw } from "lucide-react";
+import { LayoutGrid, RotateCcw } from "lucide-react";
+import type { CardDef } from "@/components/cards/registry";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useDesktop } from "@/lib/use-desktop";
 import { cn } from "@/lib/utils";
 
 type Item = { id: string; w: number; h: number };
 
-const KEY = "lc-tracker-layout-v2";
+const KEY = "lc-tracker-layout-v3";
 const EVENT = "lc-tracker-layout-change";
 const COLS = 12;
 const ROW = 64; // px per height unit
@@ -40,16 +43,25 @@ const MIN_W = 3;
 const MIN_H = 3;
 const MAX_H = 14;
 
-export const DEFAULT_LAYOUT: Item[] = [
-  { id: "hero", w: 4, h: 6 },
-  { id: "pace", w: 8, h: 9 },
-  { id: "today", w: 4, h: 3 },
-  { id: "range", w: 8, h: 7 },
-  { id: "calendar", w: 4, h: 7 },
-  { id: "heatmap", w: 12, h: 4 },
-  { id: "problems", w: 6, h: 6 },
-  { id: "topics", w: 6, h: 6 },
-];
+/** Size each card starts at when it is added (columns x row units). */
+const DEFAULT_SIZE: Record<string, { w: number; h: number }> = {
+  hero: { w: 4, h: 6 },
+  pace: { w: 8, h: 9 },
+  today: { w: 4, h: 3 },
+  range: { w: 8, h: 7 },
+  calendar: { w: 4, h: 7 },
+  heatmap: { w: 12, h: 4 },
+  recent: { w: 6, h: 6 },
+  topics: { w: 6, h: 6 },
+};
+const FALLBACK = { w: 6, h: 6 };
+
+/** What a fresh dashboard shows; everything else is one click away in "Customize". */
+const DEFAULT_VISIBLE = ["hero", "pace", "today", "calendar", "range"];
+
+const sizeOf = (id: string) => DEFAULT_SIZE[id] ?? FALLBACK;
+const defaults = (ids: string[]): Item[] =>
+  DEFAULT_VISIBLE.filter((id) => ids.includes(id)).map((id) => ({ id, ...sizeOf(id) }));
 
 const clamp = (n: number, lo: number, hi: number) =>
   Math.min(hi, Math.max(lo, Math.round(n)));
@@ -70,23 +82,21 @@ const read = () => {
   }
 };
 
-/** Merge a saved layout with the known card ids (drops removed cards, appends new ones). */
+/** A saved layout is the list of cards you chose, in order, with their sizes. */
 function normalize(saved: unknown, ids: string[]): Item[] {
-  const defaults = DEFAULT_LAYOUT.filter((d) => ids.includes(d.id));
-  if (!Array.isArray(saved)) return defaults;
+  if (!Array.isArray(saved)) return defaults(ids);
   const seen = new Set<string>();
   const out: Item[] = [];
   for (const s of saved) {
-    const base = defaults.find((d) => d.id === s?.id);
-    if (!base || seen.has(base.id)) continue;
-    seen.add(base.id);
+    if (!s || !ids.includes(s.id) || seen.has(s.id)) continue;
+    seen.add(s.id);
+    const base = sizeOf(s.id);
     out.push({
-      id: base.id,
+      id: s.id,
       w: clamp(Number(s.w) || base.w, MIN_W, COLS),
       h: clamp(Number(s.h) || base.h, MIN_H, MAX_H),
     });
   }
-  for (const d of defaults) if (!seen.has(d.id)) out.push(d);
   return out;
 }
 
@@ -104,23 +114,23 @@ function persist(items: Item[] | null) {
  */
 export function DashboardGrid({
   cards,
-  toolbar,
+  title,
 }: {
-  cards: Record<string, ReactNode>;
-  /** rendered on the left of the reset button, e.g. the logo */
-  toolbar?: ReactNode;
+  cards: Record<string, CardDef>;
+  /** heading shown on the left of the controls */
+  title?: ReactNode;
 }) {
   const desktop = useDesktop();
   const ids = Object.keys(cards).join("|");
+  const idList = useMemo(() => ids.split("|"), [ids]);
   const raw = useSyncExternalStore(subscribe, read, () => null);
   const stored = useMemo(() => {
-    const list = ids.split("|");
     try {
-      return normalize(raw ? JSON.parse(raw) : null, list);
+      return normalize(raw ? JSON.parse(raw) : null, idList);
     } catch {
-      return normalize(null, list);
+      return normalize(null, idList);
     }
-  }, [raw, ids]);
+  }, [raw, idList]);
 
   const [live, setLive] = useState<Item[] | null>(null); // while resizing
   const items = live ?? stored;
@@ -153,13 +163,78 @@ export function DashboardGrid({
     setLive(null);
   }, []);
 
+  const toggle = (id: string) =>
+    persist(
+      items.some((x) => x.id === id)
+        ? items.filter((x) => x.id !== id)
+        : [...items, { id, ...sizeOf(id) }],
+    );
+
+  const controls = (
+    <div className="flex items-center gap-1">
+      <Popover>
+        <PopoverTrigger render={<Button variant="outline" size="sm" />}>
+          <LayoutGrid data-icon="inline-start" />
+          Customize
+        </PopoverTrigger>
+        <PopoverContent align="end" className="w-72 gap-1 p-2">
+          <p className="px-2 pt-1 pb-1.5 text-xs text-muted-foreground">
+            Choose what your dashboard shows
+          </p>
+          {idList.map((id) => (
+            <label
+              key={id}
+              className="flex cursor-pointer items-start gap-3 rounded-lg px-2 py-2 hover:bg-muted"
+            >
+              <Checkbox
+                checked={items.some((x) => x.id === id)}
+                onCheckedChange={() => toggle(id)}
+                className="mt-0.5"
+              />
+              <span className="flex flex-col">
+                <span className="text-sm font-medium">{cards[id].label}</span>
+                <span className="text-xs text-muted-foreground">{cards[id].description}</span>
+              </span>
+            </label>
+          ))}
+        </PopoverContent>
+      </Popover>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => persist(null)}
+        className="text-muted-foreground"
+      >
+        <RotateCcw data-icon="inline-start" />
+        Reset
+      </Button>
+    </div>
+  );
+
+  const header = (
+    <div className="flex items-center justify-between gap-3">
+      {title}
+      {controls}
+    </div>
+  );
+
+  const empty = items.length === 0 && (
+    <div className="rounded-xl border border-dashed px-6 py-16 text-center">
+      <p className="font-medium">Your dashboard is empty</p>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Use Customize to add the cards you want to see.
+      </p>
+    </div>
+  );
+
   if (!desktop)
     return (
       <div className="flex flex-col gap-4">
-        {toolbar}
+        {header}
+        {empty}
         {items.map((x) => (
           <div key={x.id} className="h-[34rem] min-h-0">
-            {cards[x.id]}
+            {cards[x.id].node}
           </div>
         ))}
       </div>
@@ -167,18 +242,8 @@ export function DashboardGrid({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-3">
-        {toolbar}
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => persist(null)}
-          className="text-muted-foreground"
-        >
-          <RotateCcw data-icon="inline-start" />
-          Reset layout
-        </Button>
-      </div>
+      {header}
+      {empty}
       {/* a fixed id keeps dnd-kit's generated aria ids the same on the server and in the browser */}
       <DndContext
         id="dashboard-cards"
@@ -200,7 +265,7 @@ export function DashboardGrid({
                 onResize={(w, h) => onResize(x.id, w, h)}
                 onResizeEnd={onResizeEnd}
               >
-                {cards[x.id]}
+                {cards[x.id].node}
               </Cell>
             ))}
           </div>

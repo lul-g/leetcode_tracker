@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { Settings2 } from "lucide-react";
 import { DatePicker } from "@/components/date-picker";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,7 +10,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Field,
@@ -22,24 +20,19 @@ import {
 import { Input } from "@/components/ui/input";
 import type { GoalSettings } from "@/lib/pace";
 
-export function GoalDialog({
+export function SettingsDialog({
+  open,
+  onOpenChange,
   settings,
   onSave,
 }: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   settings: GoalSettings;
   onSave: (s: GoalSettings) => void;
 }) {
-  const [open, setOpen] = useState(false);
-
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger
-        render={
-          <Button variant="ghost" size="icon-sm" aria-label="Edit goal" />
-        }
-      >
-        <Settings2 />
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-sm">
         {/* remount on open so the form always starts from the saved values */}
         {open && (
@@ -47,7 +40,7 @@ export function GoalDialog({
             settings={settings}
             onSave={(s) => {
               onSave(s);
-              setOpen(false);
+              onOpenChange(false);
             }}
           />
         )}

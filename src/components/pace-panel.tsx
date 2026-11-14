@@ -1,7 +1,8 @@
 "use client";
 
 import { BurnUpChart } from "@/components/burnup-chart";
-import { GoalDialog } from "@/components/goal-dialog";
+import { Settings2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -73,13 +74,13 @@ function Key({ className, label }: { className: string; label: string }) {
 type Props = {
   solves: Solve[];
   settings: GoalSettings;
-  onSettings: (s: GoalSettings) => void;
+  onEditGoal: () => void;
   today: string;
   /** sticky difficulty filter: adds a second line to the chart */
   difficulty: Difficulty | null;
 };
 
-export function PacePanel({ solves, settings, onSettings, today, difficulty }: Props) {
+export function PacePanel({ solves, settings, onEditGoal, today, difficulty }: Props) {
   const pace = computePace(solves, settings, today);
   const actual = cumulativeSeries(solves, settings.startDate, today);
   const filtered = difficulty
@@ -102,7 +103,14 @@ export function PacePanel({ solves, settings, onSettings, today, difficulty }: P
           <Badge className={cn("h-6 px-2.5 text-xs font-semibold", st.cls)}>
             {st.label}
           </Badge>
-          <GoalDialog settings={settings} onSave={onSettings} />
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Edit goal"
+            onClick={onEditGoal}
+          >
+            <Settings2 />
+          </Button>
         </CardAction>
       </CardHeader>
 
