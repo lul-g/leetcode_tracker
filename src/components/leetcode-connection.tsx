@@ -14,21 +14,25 @@ export function LeetCodeConnection() {
   const { connection, syncStatus, syncSummary, problems, settings, sync, connect, disconnect, isDemo } =
     useApp();
   const [session, setSession] = useState("");
+  const [csrf, setCsrf] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const expired = connection.connected && syncStatus.authError;
-  const showForm = !connection.connected || expired;
+  // a failed sync usually means a bad or incomplete cookie, so offer to replace it right there
+  const failed = connection.connected && !!syncStatus.error && !syncStatus.running;
+  const showForm = !connection.connected || expired || failed;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
     setError(null);
-    const err = await connect(session);
+    const err = await connect(session, csrf);
     setBusy(false);
     if (err) setError(err);
     else {
       setSession("");
+      setCsrf("");
     }
   };
 
@@ -133,11 +137,25 @@ export function LeetCodeConnection() {
                 sync, but the server never stores it.
               </FieldDescription>
             </Field>
+            <Field>
+              <FieldLabel htmlFor="lc-csrf">csrftoken (optional)</FieldLabel>
+              <Input
+                id="lc-csrf"
+                value={csrf}
+                onChange={(e) => setCsrf(e.target.value)}
+                autoComplete="off"
+                spellCheck={false}
+                className="font-mono text-xs"
+              />
+              <FieldDescription>
+                Only needed if a sync comes back empty. It&apos;s in the same cookie list.
+              </FieldDescription>
+            </Field>
           </FieldGroup>
           {error && <p className="text-sm text-hard">{error}</p>}
           <Button type="submit" disabled={busy || !session.trim()}>
             {busy && <Loader2 data-icon="inline-start" className="animate-spin" />}
-            {expired ? "Reconnect" : "Connect"}
+            {expired || failed ? "Reconnect" : "Connect"}
           </Button>
         </form>
       )}

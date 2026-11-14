@@ -22,16 +22,20 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export type Cookie = { session: string; csrf: string };
 
-async function gql<T>(
+type Raw<T> = { data?: T; errors?: { message: string }[] };
+
+/** One GraphQL call. Returns `data` and `errors` as LeetCode sent them; throws on HTTP-level failures. */
+async function gqlRaw<T>(
   query: string,
   variables: Record<string, unknown>,
   cookie?: Cookie,
+  opts: { referer?: string } = {},
   attempt = 0,
-): Promise<T> {
+): Promise<Raw<T>> {
   const headers: Record<string, string> = {
     "content-type": "application/json",
     accept: "application/json",
-    referer: "https://leetcode.com/",
+    referer: opts.referer ?? "https://leetcode.com/",
     origin: "https://leetcode.com",
     "user-agent": UA,
   };
@@ -50,7 +54,7 @@ async function gql<T>(
   // back off and retry on rate limits / transient errors
   if ((res.status === 429 || res.status >= 500) && attempt < 3) {
     await sleep(1000 * 2 ** attempt);
-    return gql<T>(query, variables, cookie, attempt + 1);
+    return gqlRaw<T>(query, variables, cookie, opts, attempt + 1);
   }
   if (res.status === 401 || res.status === 403) {
     const text = await res.text();
@@ -61,11 +65,19 @@ async function gql<T>(
     throw new AuthError();
   }
   if (!res.ok) throw new Error(`LeetCode responded ${res.status}`);
+  return (await res.json()) as Raw<T>;
+}
 
-  const json = (await res.json()) as { data?: T; errors?: { message: string }[] };
-  if (json.errors?.length && !json.data) {
-    throw new Error(json.errors.map((e) => e.message).join("; "));
-  }
+const messages = (errors?: { message: string }[]) =>
+  (errors ?? []).map((e) => e.message).join("; ");
+
+async function gql<T>(
+  query: string,
+  variables: Record<string, unknown>,
+  cookie?: Cookie,
+): Promise<T> {
+  const json = await gqlRaw<T>(query, variables, cookie);
+  if (json.errors?.length && !json.data) throw new Error(messages(json.errors));
   return json.data as T;
 }
 
@@ -180,12 +192,17 @@ export async function fetchSubmissions(cookie: Cookie, slug: string): Promise<Su
   const LIMIT = 20;
   let lastKey: string | null = null;
   for (let offset = 0; offset < 2000; offset += LIMIT) {
-    const d: SubsPage = await gql<SubsPage>(
+    const raw: Raw<SubsPage> = await gqlRaw<SubsPage>(
       SUBS_QUERY,
       { offset, limit: LIMIT, lastKey, questionSlug: slug },
       cookie,
+      { referer: `https://leetcode.com/problems/${slug}/submissions/` },
     );
-    const page = d.questionSubmissionList;
+    const page = raw.data?.questionSubmissionList;
+    // LeetCode sometimes answers with a null list plus an explanation; pass that on
+    if (!page?.submissions && raw.errors?.length) {
+      throw new Error(`LeetCode said: ${messages(raw.errors)}`);
+    }
     for (const s of page?.submissions ?? []) {
       if (s.isPending) continue;
       out.push({
