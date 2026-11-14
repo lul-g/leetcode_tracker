@@ -6,6 +6,7 @@ import {
   DayPicker,
   getDefaultClassNames,
   type DayButton,
+  type DropdownProps,
   type Locale,
 } from "react-day-picker"
 
@@ -18,6 +19,45 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { ChevronLeftIcon, ChevronRightIcon, ChevronDownIcon } from "lucide-react"
+
+// Native <select> popups can't be themed, so the month/year pickers use the shadcn Select.
+// Defined at module level so its identity is stable and an open popup survives re-renders.
+function CalendarDropdown({
+  options,
+  value,
+  onChange,
+  disabled,
+  "aria-label": ariaLabel,
+}: DropdownProps) {
+  return (
+    <Select
+      value={String(value)}
+      disabled={disabled}
+      onValueChange={(v) =>
+        onChange?.({
+          target: { value: String(v) },
+        } as React.ChangeEvent<HTMLSelectElement>)
+      }
+    >
+      <SelectTrigger
+        size="sm"
+        aria-label={ariaLabel}
+        className="h-7 gap-1 border-transparent bg-transparent px-2 font-medium shadow-none hover:bg-muted dark:bg-transparent dark:hover:bg-muted"
+      >
+        <SelectValue>
+          {options?.find((o) => String(o.value) === String(value))?.label}
+        </SelectValue>
+      </SelectTrigger>
+      <SelectContent alignItemWithTrigger={false} align="center" className="max-h-64 min-w-24">
+        {options?.map((o) => (
+          <SelectItem key={o.value} value={String(o.value)} disabled={o.disabled}>
+            {o.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  )
+}
 
 function Calendar({
   className,
@@ -58,17 +98,17 @@ function Calendar({
         ),
         month: cn("flex w-full flex-col gap-4", defaultClassNames.month),
         nav: cn(
-          "absolute inset-x-0 top-0 flex w-full items-center justify-between gap-1",
+          "pointer-events-none absolute inset-x-0 top-0 z-10 flex w-full items-center justify-between gap-1",
           defaultClassNames.nav
         ),
         button_previous: cn(
           buttonVariants({ variant: buttonVariant }),
-          "size-(--cell-size) p-0 select-none aria-disabled:opacity-50",
+          "pointer-events-auto size-(--cell-size) p-0 select-none aria-disabled:opacity-50",
           defaultClassNames.button_previous
         ),
         button_next: cn(
           buttonVariants({ variant: buttonVariant }),
-          "size-(--cell-size) p-0 select-none aria-disabled:opacity-50",
+          "pointer-events-auto size-(--cell-size) p-0 select-none aria-disabled:opacity-50",
           defaultClassNames.button_next
         ),
         month_caption: cn(
@@ -168,39 +208,7 @@ function Calendar({
             <ChevronDownIcon className={cn("size-4", className)} {...props} />
           )
         },
-        // Native <select> popups can't be themed; use the shadcn Select for the month/year pickers.
-        Dropdown: ({ options, value, onChange, disabled, "aria-label": ariaLabel }) => (
-          <Select
-            value={String(value)}
-            disabled={disabled}
-            onValueChange={(v) =>
-              onChange?.({
-                target: { value: String(v) },
-              } as React.ChangeEvent<HTMLSelectElement>)
-            }
-          >
-            <SelectTrigger
-              size="sm"
-              aria-label={ariaLabel}
-              className="h-7 gap-1 border-transparent bg-transparent px-2 font-medium shadow-none hover:bg-muted dark:bg-transparent dark:hover:bg-muted"
-            >
-              <SelectValue>
-                {options?.find((o) => String(o.value) === String(value))?.label}
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent
-              alignItemWithTrigger={false}
-              align="center"
-              className="max-h-64 min-w-24"
-            >
-              {options?.map((o) => (
-                <SelectItem key={o.value} value={String(o.value)} disabled={o.disabled}>
-                  {o.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        ),
+        Dropdown: CalendarDropdown,
         DayButton: ({ ...props }) => (
           <CalendarDayButton locale={locale} {...props} />
         ),
