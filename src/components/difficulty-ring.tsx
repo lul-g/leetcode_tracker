@@ -48,7 +48,10 @@ export function DifficultyRing({ solved, totals, overallTotal, active, listName 
     : "Solved";
 
   return (
-    <div className="relative aspect-square w-full max-w-[220px]">
+    <div
+      className="relative aspect-square"
+      style={{ width: "min(100cqw, 100cqh, 340px)", containerType: "size" }}
+    >
       <svg viewBox="0 0 200 200" className="size-full overflow-visible">
         {/* all three difficulties */}
         <g
@@ -124,18 +127,32 @@ export function DifficultyRing({ solved, totals, overallTotal, active, listName 
       </svg>
 
       <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-        <div className="font-mono leading-none">
-          <span className="text-4xl font-bold">{centerSolved}</span>
-          <span className="text-sm text-muted-foreground">/{centerTotal}</span>
+        {/* sizes track the ring via container-query units (100cqmin = ring diameter) */}
+        <div className="leading-none font-semibold tracking-tight tabular-nums">
+          <span className="font-bold" style={{ fontSize: "15cqmin" }}>
+            {centerSolved}
+          </span>
+          <span className="text-muted-foreground" style={{ fontSize: "6.5cqmin" }}>
+            /{centerTotal}
+          </span>
         </div>
         <div
-          className="mt-2 flex items-center gap-1 text-sm"
-          style={{ color: active ? COLOR[active] : undefined }}
+          className="flex items-center gap-1"
+          style={{
+            color: active ? COLOR[active] : undefined,
+            fontSize: "6.5cqmin",
+            marginTop: "3cqmin",
+          }}
         >
-          {!active && <Check className="size-3.5 text-solved" />}
+          {!active && <Check className="size-[1em] text-solved" />}
           {centerLabel}
         </div>
-        <div className="mt-3 text-xs text-muted-foreground">{listName}</div>
+        <div
+          className="text-muted-foreground"
+          style={{ fontSize: "5.2cqmin", marginTop: "4cqmin" }}
+        >
+          {listName}
+        </div>
       </div>
     </div>
   );

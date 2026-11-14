@@ -84,3 +84,20 @@ export const DEMO_PROBLEMS: Problem[] = [
   { slug: "two-sum", title: "Two Sum", difficulty: "easy", lists: ["goal", "blind75", "nc150", "nc250", "ncall"], solvedAt: "2026-11-07" },
   { slug: "trapping-rain-water", title: "Trapping Rain Water", difficulty: "hard", lists: ["goal", "nc150", "nc250", "ncall"], solvedAt: "2026-11-03" },
 ];
+
+// DEMO ONLY: solves per day from 2026-11-01, replaced by synced submissions.
+const DEMO_PER_DAY = [0, 1, 2, 0, 1, 3, 2, 0, 2, 1, 3, 2, 1, 2];
+const DEMO_CYCLE: Difficulty[] = ["easy", "medium", "medium", "easy", "medium", "hard"];
+export const DEMO_SOLVES: { date: string; difficulty: Difficulty }[] = (() => {
+  const out: { date: string; difficulty: Difficulty }[] = [];
+  let i = 0;
+  DEMO_PER_DAY.forEach((n, d) => {
+    for (let k = 0; k < n; k++) {
+      out.push({
+        date: `2026-11-${String(d + 1).padStart(2, "0")}`,
+        difficulty: DEMO_CYCLE[i++ % DEMO_CYCLE.length],
+      });
+    }
+  });
+  return out;
+})();
