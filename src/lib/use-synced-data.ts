@@ -1,9 +1,27 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { DataPayload, SyncStatus } from "@/lib/sync-types";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { whoami, ClientAuthError } from "@/lib/lc-client";
+import {
+  KEYS,
+  useStoreReady,
+  useStored,
+  writeStore,
+  type StoredCatalog,
+  type StoredMeta,
+} from "@/lib/local-store";
+import { buildRecords } from "@/lib/records";
+import { runSync } from "@/lib/sync-client";
+import type {
+  Credentials,
+  ListTotals,
+  ProblemRecord,
+  Sub,
+  SyncMode,
+  SyncStatus,
+} from "@/lib/sync-types";
 
-const EMPTY_STATUS: SyncStatus = {
+const IDLE: SyncStatus = {
   running: false,
   mode: null,
   phase: "",
@@ -11,93 +29,98 @@ const EMPTY_STATUS: SyncStatus = {
   total: 0,
   error: null,
   authError: false,
-  finishedAt: null,
-  lastSyncedAt: null,
 };
 
+/** Pull the two cookie values out of whatever was pasted: bare values, `name=value` pairs, or a whole Cookie header. */
+export function parseCookies(session: string, csrf: string) {
+  const blob = `${session}; ${csrf}`;
+  const pick = (name: string, fallback: string) => {
+    const m = new RegExp(`${name}=([^;\\s]+)`).exec(blob);
+    return (m ? m[1] : fallback).trim().replace(/^["']|["']$/g, "");
+  };
+  const bare = (s: string) => (s.includes("=") ? "" : s.trim());
+  return {
+    session: pick("LEETCODE_SESSION", bare(session)),
+    csrf: pick("csrftoken", bare(csrf)),
+  };
+}
+
+const NO_SUBS: Record<string, Sub[]> = {};
+
 /**
- * The synced LeetCode data, the sync status, and the actions on them. Talks to the local
- * /api routes; while a sync runs it polls for progress and reloads the data when it ends.
+ * The synced LeetCode data (kept in this browser), the sync status, and the actions on them.
+ * Syncing runs in the page; see lib/sync-client.ts.
  */
 export function useSyncedData() {
-  const [data, setData] = useState<DataPayload | null>(null);
-  const [status, setStatus] = useState<SyncStatus>(EMPTY_STATUS);
-  const [loaded, setLoaded] = useState(false);
-  const wasRunning = useRef(false);
+  const ready = useStoreReady();
+  const creds = useStored<Credentials | null>(KEYS.credentials, null);
+  const subs = useStored<Record<string, Sub[]>>(KEYS.submissions, NO_SUBS);
+  const catalog = useStored<StoredCatalog | null>(KEYS.catalog, null);
+  const meta = useStored<StoredMeta>(KEYS.meta, { lastSyncedAt: null });
+  const [status, setStatus] = useState<SyncStatus>(IDLE);
+  const running = useRef(false);
 
-  const loadData = useCallback(async () => {
-    try {
-      const res = await fetch("/api/data", { cache: "no-store" });
-      if (res.ok) setData((await res.json()) as DataPayload);
-    } catch {}
-    setLoaded(true);
-  }, []);
-
-  const loadStatus = useCallback(async () => {
-    try {
-      const res = await fetch("/api/sync", { cache: "no-store" });
-      if (res.ok) setStatus((await res.json()) as SyncStatus);
-    } catch {}
-  }, []);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void loadData();
-    void loadStatus();
-  }, [loadData, loadStatus]);
-
-  // poll while a sync is running, and reload the data once it finishes
-  useEffect(() => {
-    if (status.running) {
-      wasRunning.current = true;
-      const id = setInterval(loadStatus, 1000);
-      return () => clearInterval(id);
-    }
-    if (wasRunning.current) {
-      wasRunning.current = false;
-      void loadData();
-    }
-  }, [status.running, loadStatus, loadData]);
-
-  const sync = useCallback(
-    async (mode: "incremental" | "full" = "incremental") => {
-      try {
-        const res = await fetch("/api/sync", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ mode }),
-        });
-        if (res.ok) setStatus((await res.json()) as SyncStatus);
-      } catch {}
-    },
-    [],
+  const records = useMemo<ProblemRecord[]>(
+    () => buildRecords(subs, catalog?.entries ?? {}),
+    [subs, catalog],
   );
 
-  /** Save a cookie. Resolves to an error message, or null on success. */
+  const sync = useCallback(async (mode: SyncMode = "incremental") => {
+    if (running.current) return;
+    running.current = true;
+    setStatus({ ...IDLE, running: true, mode, phase: "Starting" });
+    try {
+      await runSync(mode, (patch) => setStatus((s) => ({ ...s, ...patch })));
+      setStatus({ ...IDLE });
+    } catch (e) {
+      setStatus({
+        ...IDLE,
+        error: e instanceof Error ? e.message : String(e),
+        authError: e instanceof ClientAuthError,
+      });
+    } finally {
+      running.current = false;
+    }
+  }, []);
+
+  /** Save a cookie after LeetCode confirms it. Resolves to an error message, or null on success. */
   const connect = useCallback(
-    async (session: string, csrf: string): Promise<string | null> => {
+    async (rawSession: string, rawCsrf: string): Promise<string | null> => {
+      const { session, csrf } = parseCookies(rawSession, rawCsrf);
+      if (!session || !csrf) return "Paste both LEETCODE_SESSION and csrftoken.";
       try {
-        const res = await fetch("/api/connection", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ session, csrf }),
-        });
-        const body = (await res.json()) as { ok: boolean; error?: string };
-        if (!body.ok) return body.error ?? "Could not connect.";
-        await loadData();
+        const { username } = await whoami({ session, csrf });
+        if (!username) return "LeetCode says that cookie isn't signed in. Copy it again.";
+        if (!writeStore(KEYS.credentials, { session, csrf, username })) {
+          return "Your browser wouldn't save the cookie (storage blocked).";
+        }
         void sync("incremental"); // pull the history straight away
         return null;
-      } catch {
-        return "Could not reach the local server.";
+      } catch (e) {
+        return e instanceof Error ? e.message : "Could not connect.";
       }
     },
-    [loadData, sync],
+    [sync],
   );
 
   const disconnect = useCallback(async () => {
-    await fetch("/api/connection", { method: "DELETE" }).catch(() => {});
-    await loadData();
-  }, [loadData]);
+    writeStore(KEYS.credentials, null);
+    setStatus(IDLE);
+  }, []);
 
-  return { data, status, loaded, sync, connect, disconnect, reload: loadData };
+  const listTotals: ListTotals | null = catalog?.totals ?? null;
+
+  return {
+    ready,
+    connected: !!creds,
+    username: creds?.username ?? null,
+    lastSyncedAt: meta.lastSyncedAt,
+    hasData: meta.lastSyncedAt !== null,
+    records,
+    listTotals,
+    status,
+    sync,
+    connect,
+    disconnect,
+  };
 }

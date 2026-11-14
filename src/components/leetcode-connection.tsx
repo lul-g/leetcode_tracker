@@ -136,7 +136,7 @@ export function LeetCodeConnection() {
                 className="font-mono text-xs"
               />
               <FieldDescription>
-                Saved only on this computer, in the git-ignored <code>data</code> folder.
+                Kept only in this browser. It passes through this app’s server for each sync, but the server never stores it.
               </FieldDescription>
             </Field>
           </FieldGroup>

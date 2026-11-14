@@ -15,7 +15,7 @@ import {
 } from "@/lib/data";
 import type { GoalSettings, Solve } from "@/lib/pace";
 import { PROBLEMS, buildProblems, type Problem } from "@/lib/problems";
-import type { DataPayload, SyncStatus } from "@/lib/sync-types";
+import type { SyncStatus } from "@/lib/sync-types";
 import { useSettings } from "@/lib/use-settings";
 import { useSyncedData } from "@/lib/use-synced-data";
 
@@ -46,7 +46,7 @@ type AppState = {
   isDemo: boolean;
   /** false until the first /api/data response arrives */
   dataLoaded: boolean;
-  connection: Pick<DataPayload, "connected" | "username" | "lastSyncedAt">;
+  connection: { connected: boolean; username: string | null; lastSyncedAt: number | null };
   syncStatus: SyncStatus;
   sync: (mode?: "incremental" | "full") => Promise<void>;
   connect: (session: string, csrf: string) => Promise<string | null>;
@@ -68,7 +68,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("goal");
   const synced = useSyncedData();
-  const isDemo = !synced.data?.hasData;
+  const isDemo = !synced.hasData;
 
   // Only solves on/after the start date count toward the goal. Real data once a sync has
   // happened, otherwise the built-in demo so the app isn't empty.
@@ -76,14 +76,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     () =>
       isDemo
         ? PROBLEMS.filter((p) => p.solvedAt >= settings.startDate)
-        : buildProblems(synced.data?.problems ?? [], settings.startDate),
-    [isDemo, synced.data, settings.startDate],
+        : buildProblems(synced.records, settings.startDate),
+    [isDemo, synced.records, settings.startDate],
   );
   const solves = useMemo<Solve[]>(
     () => problems.map((p) => ({ date: p.solvedAt, difficulty: p.difficulty, topic: p.topic })),
     [problems],
   );
-  const listTotals = synced.data?.listTotals;
+  const listTotals = synced.listTotals;
   const lists = useMemo(
     () =>
       LISTS.map((l) => {
@@ -115,11 +115,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setSettingsOpen(true);
     },
     isDemo,
-    dataLoaded: synced.loaded,
+    dataLoaded: synced.ready,
     connection: {
-      connected: synced.data?.connected ?? false,
-      username: synced.data?.username ?? null,
-      lastSyncedAt: synced.data?.lastSyncedAt ?? synced.status.lastSyncedAt,
+      connected: synced.connected,
+      username: synced.username,
+      lastSyncedAt: synced.lastSyncedAt,
     },
     syncStatus: synced.status,
     sync: synced.sync,

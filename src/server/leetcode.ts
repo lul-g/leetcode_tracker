@@ -1,10 +1,11 @@
 import "server-only";
-import type { Catalog, CatalogEntry, Credentials, Sub } from "./store";
+import type { CatalogEntry, Credentials, Sub } from "@/lib/sync-types";
 
 /**
- * A small client for LeetCode's GraphQL endpoint. The REST endpoints (/api/submissions,
- * /api/problems/all) sit behind a Cloudflare challenge that blocks non-browser clients,
- * GraphQL does not, so everything here goes through it.
+ * A small client for LeetCode's GraphQL endpoint, used by the stateless /api/lc routes. The
+ * REST endpoints (/api/submissions, /api/problems/all) sit behind a Cloudflare challenge that
+ * blocks non-browser clients; GraphQL does not, so everything goes through it.
+ * Nothing here stores anything, and the cookie is never logged.
  */
 const ENDPOINT = process.env.LEETCODE_GRAPHQL_URL ?? "https://leetcode.com/graphql";
 const UA =
@@ -19,7 +20,7 @@ export class AuthError extends Error {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-type Cookie = Pick<Credentials, "session" | "csrf">;
+export type Cookie = Pick<Credentials, "session" | "csrf">;
 
 async function gql<T>(
   query: string,
@@ -47,14 +48,14 @@ async function gql<T>(
   });
 
   // back off and retry on rate limits / transient errors
-  if ((res.status === 429 || res.status >= 500) && attempt < 4) {
-    await sleep(1500 * 2 ** attempt);
+  if ((res.status === 429 || res.status >= 500) && attempt < 3) {
+    await sleep(1000 * 2 ** attempt);
     return gql<T>(query, variables, cookie, attempt + 1);
   }
   if (res.status === 401 || res.status === 403) {
     const text = await res.text();
     // a Cloudflare challenge page means the request was blocked, not that the cookie is bad
-    if (/Just a moment|challenge/i.test(text) && !cookie) {
+    if (/Just a moment|challenge/i.test(text)) {
       throw new Error("LeetCode blocked the request (Cloudflare). Try again in a minute.");
     }
     throw new AuthError();
@@ -83,7 +84,7 @@ const LEVEL = { Easy: 1, Medium: 2, Hard: 3 } as const;
 const LIST_QUERY = `query p($categorySlug: String, $limit: Int, $skip: Int, $filters: QuestionListFilterInput) {
   problemsetQuestionList: questionList(categorySlug: $categorySlug, limit: $limit, skip: $skip, filters: $filters) {
     total: totalNum
-    questions: data { questionFrontendId title titleSlug difficulty isPaidOnly }
+    questions: data { questionFrontendId title titleSlug difficulty }
   }
 }`;
 
@@ -95,53 +96,51 @@ type ListPage = {
       title: string;
       titleSlug: string;
       difficulty: keyof typeof LEVEL;
-      isPaidOnly: boolean;
     }[];
   };
 };
 
-/** Every problem on LeetCode (public, ~4,000 of them, 100 per request). */
-export async function fetchCatalog(): Promise<Catalog> {
-  const problems: Record<string, CatalogEntry> = {};
-  const LIMIT = 100;
-  for (let skip = 0; ; skip += LIMIT) {
-    const d = await gql<ListPage>(LIST_QUERY, {
-      categorySlug: "",
-      limit: LIMIT,
-      skip,
-      filters: {},
-    });
-    const page = d.problemsetQuestionList;
+const PAGE = 100;
+
+/** Every problem on LeetCode (public, ~4,000 of them, 100 per request, a few at a time). */
+export async function fetchCatalog(): Promise<Record<string, CatalogEntry>> {
+  const read = async (skip: number) =>
+    (await gql<ListPage>(LIST_QUERY, { categorySlug: "", limit: PAGE, skip, filters: {} }))
+      .problemsetQuestionList;
+
+  const first = await read(0);
+  const pages = [first];
+  const skips: number[] = [];
+  for (let s = PAGE; s < first.total; s += PAGE) skips.push(s);
+  for (let i = 0; i < skips.length; i += 6) {
+    pages.push(...(await Promise.all(skips.slice(i, i + 6).map(read))));
+  }
+
+  const out: Record<string, CatalogEntry> = {};
+  for (const page of pages) {
     for (const q of page.questions) {
-      problems[q.titleSlug] = {
+      out[q.titleSlug] = {
         n: Number(q.questionFrontendId),
         title: q.title,
         d: LEVEL[q.difficulty] ?? 2,
-        paid: q.isPaidOnly,
       };
     }
-    if (skip + LIMIT >= page.total || page.questions.length === 0) break;
-    await sleep(200);
   }
-  return { fetchedAt: Date.now(), problems };
+  return out;
 }
 
-/** Slugs of every problem the signed-in user has solved (LeetCode's own "Solved" filter). */
-export async function fetchSolvedSlugs(cookie: Cookie): Promise<string[]> {
-  const slugs: string[] = [];
-  const LIMIT = 100;
-  for (let skip = 0; ; skip += LIMIT) {
-    const d = await gql<ListPage>(
-      LIST_QUERY,
-      { categorySlug: "", limit: LIMIT, skip, filters: { status: "AC" } },
-      cookie,
-    );
-    const page = d.problemsetQuestionList;
-    for (const q of page.questions) slugs.push(q.titleSlug);
-    if (skip + LIMIT >= page.total || page.questions.length === 0) break;
-    await sleep(200);
-  }
-  return slugs;
+/** One page (100) of the problems the signed-in user has solved, via LeetCode's own "Solved" filter. */
+export async function fetchSolvedPage(
+  cookie: Cookie,
+  skip: number,
+): Promise<{ slugs: string[]; total: number }> {
+  const d = await gql<ListPage>(
+    LIST_QUERY,
+    { categorySlug: "", limit: PAGE, skip, filters: { status: "AC" } },
+    cookie,
+  );
+  const page = d.problemsetQuestionList;
+  return { slugs: page.questions.map((q) => q.titleSlug), total: page.total };
 }
 
 const SUBS_QUERY = `query s($offset: Int!, $limit: Int!, $lastKey: String, $questionSlug: String!) {
@@ -175,7 +174,7 @@ const parseRuntime = (s: string) => {
   return m ? Number(m[1]) : null;
 };
 
-/** All of the user's submissions to one problem, newest first on LeetCode, oldest first here. */
+/** All of the user's submissions to one problem, oldest first. */
 export async function fetchSubmissions(cookie: Cookie, slug: string): Promise<Sub[]> {
   const out: Sub[] = [];
   const LIMIT = 20;
@@ -199,7 +198,7 @@ export async function fetchSubmissions(cookie: Cookie, slug: string): Promise<Su
     }
     if (!page?.hasNext) break;
     lastKey = page.lastKey;
-    await sleep(150);
+    await sleep(100);
   }
   return out.sort((a, b) => a.t - b.t);
 }
