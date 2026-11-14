@@ -98,7 +98,7 @@ function GoalForm({
             value={goal}
             aria-invalid={!goalOk}
             onChange={(e) => setGoal(e.target.value)}
-            className="font-mono"
+            className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
           />
         </Field>
         <div className="grid grid-cols-2 gap-3">

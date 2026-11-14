@@ -10,6 +10,13 @@ import {
 } from "react-day-picker"
 
 import { Button, buttonVariants } from "@/components/ui/button"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { ChevronLeftIcon, ChevronRightIcon, ChevronDownIcon } from "lucide-react"
 
 function Calendar({
@@ -161,6 +168,39 @@ function Calendar({
             <ChevronDownIcon className={cn("size-4", className)} {...props} />
           )
         },
+        // Native <select> popups can't be themed; use the shadcn Select for the month/year pickers.
+        Dropdown: ({ options, value, onChange, disabled, "aria-label": ariaLabel }) => (
+          <Select
+            value={String(value)}
+            disabled={disabled}
+            onValueChange={(v) =>
+              onChange?.({
+                target: { value: String(v) },
+              } as React.ChangeEvent<HTMLSelectElement>)
+            }
+          >
+            <SelectTrigger
+              size="sm"
+              aria-label={ariaLabel}
+              className="h-7 gap-1 border-transparent bg-transparent px-2 font-medium shadow-none hover:bg-muted dark:bg-transparent dark:hover:bg-muted"
+            >
+              <SelectValue>
+                {options?.find((o) => String(o.value) === String(value))?.label}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent
+              alignItemWithTrigger={false}
+              align="center"
+              className="max-h-64 min-w-24"
+            >
+              {options?.map((o) => (
+                <SelectItem key={o.value} value={String(o.value)} disabled={o.disabled}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ),
         DayButton: ({ ...props }) => (
           <CalendarDayButton locale={locale} {...props} />
         ),
