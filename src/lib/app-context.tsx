@@ -51,7 +51,7 @@ type AppState = {
   /** what the last sync found; null before the first one */
   syncSummary: SyncSummary | null;
   sync: (mode?: "incremental" | "full") => Promise<void>;
-  connect: (raw: string, csrf?: string) => Promise<string | null>;
+  connect: (raw: string) => Promise<string | null>;
   disconnect: () => Promise<void>;
 };
 

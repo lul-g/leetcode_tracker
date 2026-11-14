@@ -11,28 +11,39 @@ import { timeAgo } from "@/lib/time-ago";
 
 /** Settings tab: paste your LeetCode cookie once, then sync from the sidebar. */
 export function LeetCodeConnection() {
-  const { connection, syncStatus, syncSummary, problems, settings, sync, connect, disconnect, isDemo } =
-    useApp();
+  const {
+    connection,
+    syncStatus,
+    syncSummary,
+    problems,
+    settings,
+    sync,
+    connect,
+    disconnect,
+    isDemo,
+  } = useApp();
   const [session, setSession] = useState("");
-  const [csrf, setCsrf] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [replacing, setReplacing] = useState(false);
 
   const expired = connection.connected && syncStatus.authError;
-  // a failed sync usually means a bad or incomplete cookie, so offer to replace it right there
   const failed = connection.connected && !!syncStatus.error && !syncStatus.running;
-  const showForm = !connection.connected || expired || failed;
+  // the cookie form is for connecting, or replacing a cookie that stopped working
+  const showForm = !connection.connected || expired || replacing;
+  const headline = syncStatus.error?.split("\n")[0] ?? "";
+  const detail = syncStatus.error?.split("\n").slice(1).join("\n").trim() ?? "";
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
     setError(null);
-    const err = await connect(session, csrf);
+    const err = await connect(session);
     setBusy(false);
     if (err) setError(err);
     else {
       setSession("");
-      setCsrf("");
+      setReplacing(false);
     }
   };
 
@@ -69,15 +80,15 @@ export function LeetCodeConnection() {
         </div>
       )}
 
-      {connection.connected && syncStatus.error && !syncStatus.running && (
+      {failed && (
         <div className="flex flex-col gap-2 rounded-lg bg-hard/10 p-3 text-sm text-hard ring-1 ring-hard/20">
           <div className="flex items-start gap-2">
             <TriangleAlert className="mt-0.5 size-4 shrink-0" />
-            <span className="min-w-0 flex-1 font-medium">{syncStatus.error.split("\n")[0]}</span>
+            <span className="min-w-0 flex-1 font-medium break-words">{headline}</span>
           </div>
-          {syncStatus.error.includes("\n") && (
-            <pre className="max-h-40 overflow-auto rounded-md bg-background/60 p-2 font-mono text-xs break-words whitespace-pre-wrap text-foreground">
-              {syncStatus.error.split("\n").slice(1).join("\n").trim()}
+          {detail && (
+            <pre className="max-h-32 overflow-auto rounded-md bg-background/60 p-2 font-mono text-xs break-all whitespace-pre-wrap text-foreground">
+              {detail}
             </pre>
           )}
           <Button
@@ -94,7 +105,7 @@ export function LeetCodeConnection() {
       )}
 
       {connection.connected && !expired && (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button onClick={() => sync("incremental")} disabled={syncStatus.running}>
             {syncStatus.running ? (
               <Loader2 data-icon="inline-start" className="animate-spin" />
@@ -111,15 +122,25 @@ export function LeetCodeConnection() {
           >
             Full resync
           </Button>
-          <Button variant="ghost" className="ml-auto text-muted-foreground" onClick={disconnect}>
-            Disconnect
-          </Button>
+          <div className="ml-auto flex gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground"
+              onClick={() => setReplacing((v) => !v)}
+            >
+              {replacing ? "Cancel" : "Replace cookie"}
+            </Button>
+            <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={disconnect}>
+              Disconnect
+            </Button>
+          </div>
         </div>
       )}
 
       {showForm && (
         <form onSubmit={submit} className="flex flex-col gap-4">
-          {isDemo && !expired && (
+          {isDemo && !expired && !connection.connected && (
             <p className="text-sm text-muted-foreground">
               Connect once and Pacer pulls your real submission history. Until then you&apos;re
               looking at demo data.
@@ -154,25 +175,11 @@ export function LeetCodeConnection() {
                 sync, but the server never stores it.
               </FieldDescription>
             </Field>
-            <Field>
-              <FieldLabel htmlFor="lc-csrf">csrftoken (optional)</FieldLabel>
-              <Input
-                id="lc-csrf"
-                value={csrf}
-                onChange={(e) => setCsrf(e.target.value)}
-                autoComplete="off"
-                spellCheck={false}
-                className="font-mono text-xs"
-              />
-              <FieldDescription>
-                Only needed if a sync comes back empty. It&apos;s in the same cookie list.
-              </FieldDescription>
-            </Field>
           </FieldGroup>
           {error && <p className="text-sm text-hard">{error}</p>}
           <Button type="submit" disabled={busy || !session.trim()}>
             {busy && <Loader2 data-icon="inline-start" className="animate-spin" />}
-            {expired || failed ? "Reconnect" : "Connect"}
+            {expired || replacing ? "Reconnect" : "Connect"}
           </Button>
         </form>
       )}

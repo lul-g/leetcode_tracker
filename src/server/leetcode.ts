@@ -175,7 +175,8 @@ type SubsPage = {
           langName: string;
           runtime: string;
           timestamp: string;
-          isPending: boolean;
+          /** LeetCode sends the text "Not Pending" / "Pending", not a boolean */
+          isPending: boolean | string;
         }[]
       | null;
   };
@@ -213,7 +214,7 @@ export async function fetchSubmissions(
       );
     }
     for (const s of page?.submissions ?? []) {
-      if (s.isPending) continue;
+      if (s.isPending === true || String(s.isPending).toLowerCase() === "pending") continue;
       out.push({
         id: String(s.id),
         t: Number(s.timestamp),

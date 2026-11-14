@@ -85,10 +85,8 @@ export function useSyncedData() {
 
   /** Save a cookie after LeetCode confirms it. Resolves to an error message, or null on success. */
   const connect = useCallback(
-    async (raw: string, extraCsrf = ""): Promise<string | null> => {
-      const parsed = parseCookies(raw);
-      const session = parsed.session;
-      const csrf = parsed.csrf || extraCsrf.trim();
+    async (raw: string): Promise<string | null> => {
+      const { session, csrf } = parseCookies(raw);
       if (!session) return "Paste your LEETCODE_SESSION value.";
       try {
         const { username } = await whoami({ session, csrf });

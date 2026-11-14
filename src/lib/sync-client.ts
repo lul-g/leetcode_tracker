@@ -109,7 +109,7 @@ export async function runSync(mode: SyncMode, report: Report): Promise<void> {
     throw new Error(
       `LeetCode says you've solved ${solved.length} problems, but it didn't hand over any of ` +
         "the submissions when asked. Your history is fine; this is about how the request is " +
-        "sent. Reconnect with your csrftoken filled in, or paste your whole Cookie header." +
+        "read or sent. Try Replace cookie with a fresh LEETCODE_SESSION." +
         (firstNote ? `
 
 What LeetCode sent back (${firstNote})` : ""),
