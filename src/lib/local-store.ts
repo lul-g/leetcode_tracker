@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useSyncExternalStore } from "react";
-import type { CatalogEntry, Credentials, ListTotals, Sub } from "@/lib/sync-types";
+import type { CatalogEntry, Credentials, ListTotals, Sub, SyncSummary } from "@/lib/sync-types";
 
 /**
  * Everything the sync keeps lives in this browser's localStorage: the cookie, your submissions,
@@ -19,7 +19,7 @@ export type StoredCatalog = {
   entries: Record<string, CatalogEntry>;
   totals: ListTotals;
 };
-export type StoredMeta = { lastSyncedAt: number | null };
+export type StoredMeta = { lastSyncedAt: number | null; summary?: SyncSummary };
 
 const EVENT = "pacer-store-change";
 

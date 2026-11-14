@@ -11,7 +11,8 @@ import { timeAgo } from "@/lib/time-ago";
 
 /** Settings tab: paste your LeetCode cookie once, then sync from the sidebar. */
 export function LeetCodeConnection() {
-  const { connection, syncStatus, sync, connect, disconnect, isDemo } = useApp();
+  const { connection, syncStatus, syncSummary, problems, settings, sync, connect, disconnect, isDemo } =
+    useApp();
   const [session, setSession] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -47,6 +48,13 @@ export function LeetCodeConnection() {
                   ? `Last synced ${timeAgo(connection.lastSyncedAt)}`
                   : "Not synced yet"}
             </p>
+            {!syncStatus.running && syncSummary && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                LeetCode lists {syncSummary.solvedOnLeetCode} solved ·{" "}
+                <span className="text-foreground">{problems.length}</span> count toward your goal
+                (accepted since {settings.startDate})
+              </p>
+            )}
             {syncStatus.running && syncStatus.total > 0 && (
               <Progress
                 value={(syncStatus.done / syncStatus.total) * 100}

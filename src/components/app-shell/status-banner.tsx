@@ -8,7 +8,17 @@ import { cn } from "@/lib/utils";
 
 /** A slim strip above the page: demo data, a running sync, or an expired cookie. */
 export function StatusBanner() {
-  const { isDemo, dataLoaded, connection, syncStatus, openSettings, sync } = useApp();
+  const {
+    isDemo,
+    dataLoaded,
+    connection,
+    syncStatus,
+    syncSummary,
+    problems,
+    settings,
+    openSettings,
+    sync,
+  } = useApp();
 
   if (syncStatus.running) {
     return (
@@ -47,6 +57,52 @@ export function StatusBanner() {
         <span className="min-w-0 flex-1 truncate">Sync failed: {syncStatus.error}</span>
         <Button size="sm" variant="outline" onClick={() => sync("incremental")}>
           Retry
+        </Button>
+      </Strip>
+    );
+  }
+
+  // synced fine, but nothing counts: explain why instead of showing a bare zero
+  if (dataLoaded && !isDemo && syncSummary && problems.length === 0) {
+    const start = new Date(`${settings.startDate}T00:00:00`).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+    if (syncSummary.solvedOnLeetCode === 0) {
+      return (
+        <Strip tone="warn" icon={<TriangleAlert className="size-4" />}>
+          <span className="min-w-0 flex-1">
+            LeetCode reported 0 solved problems for this session. Check that the cookie is from
+            the right account.
+          </span>
+          <Button size="sm" variant="outline" onClick={() => openSettings("leetcode")}>
+            Open settings
+          </Button>
+        </Strip>
+      );
+    }
+    if (syncSummary.withAccepted === 0) {
+      return (
+        <Strip tone="warn" icon={<TriangleAlert className="size-4" />}>
+          <span className="min-w-0 flex-1">
+            LeetCode lists {syncSummary.solvedOnLeetCode} solved, but no accepted submissions
+            came through.
+          </span>
+          <Button size="sm" variant="outline" onClick={() => sync("full")}>
+            Full resync
+          </Button>
+        </Strip>
+      );
+    }
+    return (
+      <Strip tone="info" icon={<Info className="size-4" />}>
+        <span className="min-w-0 flex-1">
+          LeetCode shows {syncSummary.solvedOnLeetCode} solved, but none were accepted on or
+          after your start date ({start}). Only solves since then count toward your goal.
+        </span>
+        <Button size="sm" variant="outline" onClick={() => openSettings("goal")}>
+          Change start date
         </Button>
       </Strip>
     );

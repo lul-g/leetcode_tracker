@@ -15,7 +15,7 @@ import {
   type StoredCatalog,
 } from "@/lib/local-store";
 import { NC150_SLUGS, BLIND75_SLUGS } from "@/lib/lists-data";
-import type { SyncMode, SyncStatus, Sub } from "@/lib/sync-types";
+import type { SyncMode, SyncStatus, SyncSummary, Sub } from "@/lib/sync-types";
 
 type Report = (patch: Partial<SyncStatus>) => void;
 
@@ -78,11 +78,15 @@ export async function runSync(mode: SyncMode, report: Report): Promise<void> {
 
   const next: Record<string, Sub[]> = { ...stored };
   let done = 0;
+  let emptyFetches = 0;
   let sinceSave = 0;
   const queue = [...todo];
   const worker = async () => {
     for (let slug = queue.shift(); slug; slug = queue.shift()) {
-      next[slug] = (await submissionsFor(cookie, slug)).subs;
+      const { subs } = await submissionsFor(cookie, slug);
+      // LeetCode says it is solved, so at least one submission should exist
+      if (subs.length === 0) emptyFetches++;
+      next[slug] = subs;
       done++;
       report({ done });
       // save as we go so a long first sync survives the tab closing
@@ -97,9 +101,32 @@ export async function runSync(mode: SyncMode, report: Report): Promise<void> {
     throw new Error("Your browser wouldn't save the data (storage full or blocked).");
   }
 
+  if (todo.length > 0 && emptyFetches === todo.length) {
+    throw new Error(
+      "LeetCode lists problems as solved but returned no submissions for any of them. " +
+        "Paste a fresh LEETCODE_SESSION, or paste your whole Cookie header.",
+    );
+  }
+
   // details (number, title, difficulty) for everything solved, and list totals
   await refreshCatalog(Object.keys(next), report);
-  writeStore(KEYS.meta, { lastSyncedAt: Date.now() });
+
+  let withAccepted = 0;
+  let newestAcceptedAt: number | null = null;
+  for (const list of Object.values(next)) {
+    const ok = list.filter((s) => s.ok);
+    if (!ok.length) continue;
+    withAccepted++;
+    const newest = Math.max(...ok.map((s) => s.t));
+    if (newestAcceptedAt === null || newest > newestAcceptedAt) newestAcceptedAt = newest;
+  }
+  const summary: SyncSummary = {
+    solvedOnLeetCode: solved.length,
+    withAccepted,
+    emptyFetches,
+    newestAcceptedAt,
+  };
+  writeStore(KEYS.meta, { lastSyncedAt: Date.now(), summary });
 }
 
 /** Fill in catalog details for any solved problem we don't have yet, and refresh list totals weekly. */

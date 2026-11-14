@@ -15,7 +15,7 @@ import {
 } from "@/lib/data";
 import type { GoalSettings, Solve } from "@/lib/pace";
 import { PROBLEMS, buildProblems, type Problem } from "@/lib/problems";
-import type { SyncStatus } from "@/lib/sync-types";
+import type { SyncStatus, SyncSummary } from "@/lib/sync-types";
 import { useSettings } from "@/lib/use-settings";
 import { useSyncedData } from "@/lib/use-synced-data";
 
@@ -48,6 +48,8 @@ type AppState = {
   dataLoaded: boolean;
   connection: { connected: boolean; username: string | null; lastSyncedAt: number | null };
   syncStatus: SyncStatus;
+  /** what the last sync found; null before the first one */
+  syncSummary: SyncSummary | null;
   sync: (mode?: "incremental" | "full") => Promise<void>;
   connect: (raw: string) => Promise<string | null>;
   disconnect: () => Promise<void>;
@@ -122,6 +124,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       lastSyncedAt: synced.lastSyncedAt,
     },
     syncStatus: synced.status,
+    syncSummary: synced.summary,
     sync: synced.sync,
     connect: synced.connect,
     disconnect: synced.disconnect,

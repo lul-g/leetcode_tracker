@@ -45,6 +45,18 @@ export type ProblemRecord = {
 
 export type SyncMode = "incremental" | "full";
 
+/** What the last sync found, shown in Settings so a "nothing solved" screen can be explained. */
+export type SyncSummary = {
+  /** problems LeetCode reports as solved for this session */
+  solvedOnLeetCode: number;
+  /** of those, how many have at least one accepted submission downloaded */
+  withAccepted: number;
+  /** solved problems for which LeetCode returned no submissions at all */
+  emptyFetches: number;
+  /** newest accepted submission, epoch seconds */
+  newestAcceptedAt: number | null;
+};
+
 export type SyncStatus = {
   running: boolean;
   mode: SyncMode | null;

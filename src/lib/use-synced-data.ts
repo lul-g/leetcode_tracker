@@ -116,6 +116,7 @@ export function useSyncedData() {
     username: creds?.username ?? null,
     lastSyncedAt: meta.lastSyncedAt,
     hasData: meta.lastSyncedAt !== null,
+    summary: meta.summary ?? null,
     records,
     listTotals,
     status,
