@@ -1,13 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { KeyRound, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
+import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { useApp } from "@/lib/app-context";
+import { cn } from "@/lib/utils";
 
 /**
  * Paste your LEETCODE_SESSION straight into the sidebar: pasting connects and starts a sync,
  * Enter does the same for typed text. Always there, so a fresh cookie is one paste away.
+ * Looks like the field in Settings, so the two read as the same thing.
  */
 export function SidebarConnect() {
   const { connection, syncStatus, connect } = useApp();
@@ -16,14 +19,13 @@ export function SidebarConnect() {
   const [error, setError] = useState<string | null>(null);
 
   const expired = connection.connected && syncStatus.authError;
-  const label = !connection.connected
-    ? "Connect LeetCode"
+  const hint = error
+    ? error
     : expired
-      ? "Cookie expired: paste a new one"
-      : "LeetCode cookie";
-  const placeholder = connection.connected && !expired
-    ? "Paste to replace"
-    : "Paste LEETCODE_SESSION";
+      ? "Expired: paste a new one."
+      : connection.connected
+        ? "Paste a new one to replace it."
+        : "Paste it to connect. Kept only in this browser.";
 
   const submit = async (raw: string) => {
     if (!raw.trim() || busy) return;
@@ -36,32 +38,17 @@ export function SidebarConnect() {
   };
 
   return (
-    <div className="flex flex-col gap-1.5 px-0.5 pb-2">
-      <label
-        htmlFor="sidebar-cookie"
-        className={
-          expired
-            ? "px-2 text-xs font-medium text-medium"
-            : "px-2 text-xs font-medium text-muted-foreground"
-        }
-      >
-        {label}
-      </label>
+    <Field data-invalid={!!error} className="gap-2 pb-3">
+      <FieldLabel htmlFor="sidebar-cookie">LEETCODE_SESSION</FieldLabel>
       <div className="relative">
-        {busy ? (
-          <Loader2 className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 animate-spin text-muted-foreground" />
-        ) : (
-          <KeyRound className="pointer-events-none absolute top-1/2 left-2.5 size-3.5 -translate-y-1/2 text-muted-foreground" />
-        )}
         <Input
           id="sidebar-cookie"
           value={value}
           disabled={busy}
-          placeholder={placeholder}
+          placeholder="eyJ0eXAiOiJKV1QiLCJhbGci…"
           autoComplete="off"
           spellCheck={false}
           aria-invalid={!!error}
-          aria-label="LEETCODE_SESSION cookie"
           onChange={(e) => {
             setValue(e.target.value);
             if (error) setError(null);
@@ -82,10 +69,15 @@ export function SidebarConnect() {
             }
           }}
           // hide the value on screen without asking the browser to save it as a password
-          className="h-8 [-webkit-text-security:disc] pl-8 font-mono text-xs"
+          className={cn("font-mono text-xs [-webkit-text-security:disc]", busy && "pr-9")}
         />
+        {busy && (
+          <Loader2 className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+        )}
       </div>
-      {error && <p className="px-2 text-xs text-hard">{error}</p>}
-    </div>
+      <FieldDescription className={cn("text-xs", expired && !error && "text-medium")}>
+        {hint}
+      </FieldDescription>
+    </Field>
   );
 }
