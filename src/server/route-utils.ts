@@ -5,16 +5,21 @@ export class BadRequest extends Error {}
 
 const TOKEN = /^[\w.\-+/=%]{4,4096}$/;
 
-/** Pull and sanity-check the cookie the browser sent. It is used for this one request and never stored or logged. */
+/**
+ * Pull and sanity-check the cookie the browser sent. It is used for this one request and never
+ * stored or logged. Only LEETCODE_SESSION matters: LeetCode's GraphQL doesn't check the csrf
+ * token (verified: a mismatched one is accepted), so when none is sent we make one up.
+ */
 export function cookieFrom(body: unknown): Cookie {
   const b = (body ?? {}) as { session?: unknown; csrf?: unknown };
-  if (typeof b.session !== "string" || typeof b.csrf !== "string") {
-    throw new BadRequest("Missing cookie.");
+  if (typeof b.session !== "string" || !TOKEN.test(b.session)) {
+    throw new BadRequest("That doesn't look like a LeetCode session value.");
   }
-  if (!TOKEN.test(b.session) || !TOKEN.test(b.csrf)) {
-    throw new BadRequest("That doesn't look like a LeetCode cookie value.");
+  if (typeof b.csrf === "string" && b.csrf) {
+    if (!TOKEN.test(b.csrf)) throw new BadRequest("That csrftoken doesn't look right.");
+    return { session: b.session, csrf: b.csrf };
   }
-  return { session: b.session, csrf: b.csrf };
+  return { session: b.session, csrf: crypto.randomUUID().replace(/-/g, "") };
 }
 
 export const isSlug = (s: unknown): s is string =>

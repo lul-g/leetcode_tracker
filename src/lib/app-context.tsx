@@ -49,7 +49,7 @@ type AppState = {
   connection: { connected: boolean; username: string | null; lastSyncedAt: number | null };
   syncStatus: SyncStatus;
   sync: (mode?: "incremental" | "full") => Promise<void>;
-  connect: (session: string, csrf: string) => Promise<string | null>;
+  connect: (raw: string) => Promise<string | null>;
   disconnect: () => Promise<void>;
 };
 

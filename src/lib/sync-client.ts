@@ -33,7 +33,7 @@ const WEEK = 7 * 24 * 3600 * 1000;
 export async function runSync(mode: SyncMode, report: Report): Promise<void> {
   const creds = loadCredentials();
   if (!creds) throw new Error("Not connected to LeetCode yet.");
-  const cookie = { session: creds.session, csrf: creds.csrf };
+  const cookie = { session: creds.session, csrf: creds.csrf || undefined };
 
   // An expired cookie doesn't error on LeetCode's side: it just looks like a signed-out user
   // with nothing solved. So check who we are before trusting any of the answers.

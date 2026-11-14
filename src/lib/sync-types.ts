@@ -12,7 +12,12 @@ export type Sub = {
 };
 
 /** What the browser keeps for LeetCode access. Lives in localStorage; the server never stores it. */
-export type Credentials = { session: string; csrf: string; username: string | null };
+export type Credentials = {
+  session: string;
+  /** optional: LeetCode does not require it, so it is usually empty */
+  csrf?: string;
+  username: string | null;
+};
 
 /** What we know about a problem from LeetCode's catalog. */
 export type CatalogEntry = {

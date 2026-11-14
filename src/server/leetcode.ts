@@ -1,5 +1,5 @@
 import "server-only";
-import type { CatalogEntry, Credentials, Sub } from "@/lib/sync-types";
+import type { CatalogEntry, Sub } from "@/lib/sync-types";
 
 /**
  * A small client for LeetCode's GraphQL endpoint, used by the stateless /api/lc routes. The
@@ -20,7 +20,7 @@ export class AuthError extends Error {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-export type Cookie = Pick<Credentials, "session" | "csrf">;
+export type Cookie = { session: string; csrf: string };
 
 async function gql<T>(
   query: string,

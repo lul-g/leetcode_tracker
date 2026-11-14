@@ -8,7 +8,7 @@ export class ClientAuthError extends Error {
   }
 }
 
-type Cookie = { session: string; csrf: string };
+type Cookie = { session: string; csrf?: string };
 
 /** POST to one of our stateless /api/lc routes. The cookie rides along for that request only. */
 async function call<T>(path: string, body: object): Promise<T> {

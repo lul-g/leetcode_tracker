@@ -31,18 +31,18 @@ const IDLE: SyncStatus = {
   authError: false,
 };
 
-/** Pull the two cookie values out of whatever was pasted: bare values, `name=value` pairs, or a whole Cookie header. */
-export function parseCookies(session: string, csrf: string) {
-  const blob = `${session}; ${csrf}`;
-  const pick = (name: string, fallback: string) => {
-    const m = new RegExp(`${name}=([^;\\s]+)`).exec(blob);
-    return (m ? m[1] : fallback).trim().replace(/^["']|["']$/g, "");
+/**
+ * Pull the session out of whatever was pasted: the bare LEETCODE_SESSION value, a
+ * `LEETCODE_SESSION=...` pair, or a whole Cookie header (a csrftoken in it is kept too).
+ */
+export function parseCookies(input: string) {
+  const clean = (s: string) => s.trim().replace(/^["']|["']$/g, "");
+  const pick = (name: string) => {
+    const m = new RegExp(`${name}=([^;\\s]+)`).exec(input);
+    return m ? clean(m[1]) : "";
   };
-  const bare = (s: string) => (s.includes("=") ? "" : s.trim());
-  return {
-    session: pick("LEETCODE_SESSION", bare(session)),
-    csrf: pick("csrftoken", bare(csrf)),
-  };
+  const session = pick("LEETCODE_SESSION") || (input.includes("=") ? "" : clean(input));
+  return { session, csrf: pick("csrftoken") };
 }
 
 const NO_SUBS: Record<string, Sub[]> = {};
@@ -85,13 +85,13 @@ export function useSyncedData() {
 
   /** Save a cookie after LeetCode confirms it. Resolves to an error message, or null on success. */
   const connect = useCallback(
-    async (rawSession: string, rawCsrf: string): Promise<string | null> => {
-      const { session, csrf } = parseCookies(rawSession, rawCsrf);
-      if (!session || !csrf) return "Paste both LEETCODE_SESSION and csrftoken.";
+    async (raw: string): Promise<string | null> => {
+      const { session, csrf } = parseCookies(raw);
+      if (!session) return "Paste your LEETCODE_SESSION value.";
       try {
         const { username } = await whoami({ session, csrf });
         if (!username) return "LeetCode says that cookie isn't signed in. Copy it again.";
-        if (!writeStore(KEYS.credentials, { session, csrf, username })) {
+        if (!writeStore(KEYS.credentials, { session, csrf: csrf || undefined, username })) {
           return "Your browser wouldn't save the cookie (storage blocked).";
         }
         void sync("incremental"); // pull the history straight away

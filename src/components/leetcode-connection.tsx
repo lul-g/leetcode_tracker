@@ -13,7 +13,6 @@ import { timeAgo } from "@/lib/time-ago";
 export function LeetCodeConnection() {
   const { connection, syncStatus, sync, connect, disconnect, isDemo } = useApp();
   const [session, setSession] = useState("");
-  const [csrf, setCsrf] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -24,12 +23,11 @@ export function LeetCodeConnection() {
     e.preventDefault();
     setBusy(true);
     setError(null);
-    const err = await connect(session, csrf);
+    const err = await connect(session);
     setBusy(false);
     if (err) setError(err);
     else {
       setSession("");
-      setCsrf("");
     }
   };
 
@@ -106,8 +104,7 @@ export function LeetCodeConnection() {
               leetcode.com.
             </li>
             <li>
-              Copy the values of <code className="text-foreground">LEETCODE_SESSION</code> and{" "}
-              <code className="text-foreground">csrftoken</code>.
+              Copy the value of <code className="text-foreground">LEETCODE_SESSION</code>.
             </li>
           </ol>
           <FieldGroup>
@@ -123,25 +120,14 @@ export function LeetCodeConnection() {
                 aria-invalid={!!error}
                 className="font-mono text-xs"
               />
-            </Field>
-            <Field data-invalid={!!error}>
-              <FieldLabel htmlFor="lc-csrf">csrftoken</FieldLabel>
-              <Input
-                id="lc-csrf"
-                value={csrf}
-                onChange={(e) => setCsrf(e.target.value)}
-                autoComplete="off"
-                spellCheck={false}
-                aria-invalid={!!error}
-                className="font-mono text-xs"
-              />
               <FieldDescription>
-                Kept only in this browser. It passes through this app’s server for each sync, but the server never stores it.
+                Kept only in this browser. It passes through this app&apos;s server for each
+                sync, but the server never stores it.
               </FieldDescription>
             </Field>
           </FieldGroup>
           {error && <p className="text-sm text-hard">{error}</p>}
-          <Button type="submit" disabled={busy || !session.trim() || !csrf.trim()}>
+          <Button type="submit" disabled={busy || !session.trim()}>
             {busy && <Loader2 data-icon="inline-start" className="animate-spin" />}
             {expired ? "Reconnect" : "Connect"}
           </Button>
