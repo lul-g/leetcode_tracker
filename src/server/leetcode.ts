@@ -199,9 +199,13 @@ export async function fetchSubmissions(cookie: Cookie, slug: string): Promise<Su
       { referer: `https://leetcode.com/problems/${slug}/submissions/` },
     );
     const page = raw.data?.questionSubmissionList;
-    // LeetCode sometimes answers with a null list plus an explanation; pass that on
-    if (!page?.submissions && raw.errors?.length) {
-      throw new Error(`LeetCode said: ${messages(raw.errors)}`);
+    // A solved problem always has submissions, so a null list means LeetCode didn't accept the
+    // request. Pass on its explanation, or the raw reply, so the cause is visible in the app.
+    if (!page?.submissions) {
+      if (raw.errors?.length) throw new Error(`LeetCode said: ${messages(raw.errors)}`);
+      throw new Error(
+        `LeetCode returned no submission list for "${slug}". Raw reply: ${JSON.stringify(raw).slice(0, 300)}`,
+      );
     }
     for (const s of page?.submissions ?? []) {
       if (s.isPending) continue;
