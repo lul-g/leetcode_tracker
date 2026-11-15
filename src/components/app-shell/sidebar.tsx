@@ -55,6 +55,7 @@ export function Sidebar() {
     setListId,
     openSettings,
     settings,
+    hydrated,
     isDemo,
     connection,
     syncStatus,
@@ -137,7 +138,7 @@ export function Sidebar() {
       </nav>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
-        {!collapsed && (
+        {!collapsed && hydrated && (
           <>
             <p className="px-2.5 pb-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
               Lists
@@ -183,8 +184,8 @@ export function Sidebar() {
       </div>
 
       <div className="flex flex-col gap-0.5 border-t p-3">
-        {!collapsed && <SidebarConnect />}
-        {withTip(
+        {!collapsed && hydrated && <SidebarConnect />}
+        {hydrated && withTip(
           syncLabel,
           <button
             type="button"

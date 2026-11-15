@@ -44,7 +44,9 @@ type AppState = {
   openSettings: (tab?: SettingsTab) => void;
   /** true until a first sync has brought in real data */
   isDemo: boolean;
-  /** false until the first /api/data response arrives */
+  /** false until this browser's saved data (settings, sync, layout) has been read */
+  hydrated: boolean;
+  /** same as `hydrated`, kept for callers that read it */
   dataLoaded: boolean;
   connection: { connected: boolean; username: string | null; lastSyncedAt: number | null };
   syncStatus: SyncStatus;
@@ -70,16 +72,20 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("goal");
   const synced = useSyncedData();
-  const isDemo = !synced.hasData;
+  const hydrated = synced.ready;
+  // Until saved data is readable, claim nothing: no demo numbers that then flip to yours.
+  const isDemo = hydrated && !synced.hasData;
 
   // Only solves on/after the start date count toward the goal. Real data once a sync has
   // happened, otherwise the built-in demo so the app isn't empty.
   const problems = useMemo(
     () =>
-      isDemo
-        ? PROBLEMS.filter((p) => p.solvedAt >= settings.startDate)
-        : buildProblems(synced.records, settings.startDate),
-    [isDemo, synced.records, settings.startDate],
+      !hydrated
+        ? []
+        : isDemo
+          ? PROBLEMS.filter((p) => p.solvedAt >= settings.startDate)
+          : buildProblems(synced.records, settings.startDate),
+    [hydrated, isDemo, synced.records, settings.startDate],
   );
   const solves = useMemo<Solve[]>(
     () => problems.map((p) => ({ date: p.solvedAt, difficulty: p.difficulty, topic: p.topic })),
@@ -117,7 +123,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setSettingsOpen(true);
     },
     isDemo,
-    dataLoaded: synced.ready,
+    hydrated,
+    dataLoaded: hydrated,
     connection: {
       connected: synced.connected,
       username: synced.username,
