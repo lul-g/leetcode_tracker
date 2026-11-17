@@ -1,16 +1,15 @@
-import type { Remote } from "./engine";
-
-export type SaveResult =
-  | { ok: true; version: string }
-  | { ok: false; conflict: true }
-  | { ok: false; conflict?: false; error: string };
+import type { Change, RemoteRow } from "./engine";
 
 /** Where the cloud copy of your data lives, as far as the sync is concerned. */
 export interface CloudBackend {
-  /** the stored data plus a version token used to detect another computer writing meanwhile */
-  load(key: string): Promise<{ data: Remote; version: string | null }>;
-  /** write only if nobody else has since `version` (null = nothing stored yet) */
-  save(key: string, data: Remote, version: string | null): Promise<SaveResult>;
+  /**
+   * Send the rows that changed here, get back every row that changed in the cloud since `cursor`
+   * (for the rows just sent, the cloud's final answer).
+   */
+  sync(
+    key: string,
+    body: { cursor: string | null; first: boolean; changes: Change[] },
+  ): Promise<{ rows: RemoteRow[]; cursor: string | null }>;
 }
 
 /** The server has no database or sync key configured. */

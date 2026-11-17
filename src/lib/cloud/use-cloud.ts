@@ -2,14 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useStored, writeStore } from "@/lib/local-store";
-import { emptyMeta, noteLocalChanges, reconcile } from "./engine";
+import { applyRows, isFirstSync, planChanges, type Change } from "./engine";
 import { createHttpBackend, fetchStatus, type DbHealth } from "./http-backend";
 import {
   CHANGE_EVENTS,
   SYNC_KEY_STORE,
-  readLocalRaw,
+  readLocalRows,
   readMeta,
-  writeLocalRaw,
+  writeLocalRows,
   writeMeta,
 } from "./sections";
 import { BadKeyError, NotConfiguredError } from "./types";
@@ -43,7 +43,8 @@ export type CloudState = {
 const PUSH_DELAY = 3000;
 /** don't re-sync on tab focus more often than this */
 const FOCUS_GAP = 60_000;
-const OWNER = "owner";
+/** rows per request, so a big first upload stays well under the host's body limit */
+const BATCH = 150;
 
 /**
  * Keeps this browser's settings, card layout, manual solves, notes, completed problems and
@@ -81,39 +82,35 @@ export function useCloud(): CloudState {
     setStatus("syncing");
     setError(null);
     try {
-      for (let attempt = 0; attempt < 4; attempt++) {
-        const { data, version } = await backend.load(syncKey);
-        // an empty database (a new project) has nothing to agree on: start over and upload it all
-        const stored = version === null ? { uid: OWNER, meta: emptyMeta() } : readMeta();
+      let meta = readMeta();
+      // decided once per run, so every batch of a first sync is treated the same way
+      const first = isFirstSync(meta);
+      const planned = planChanges(readLocalRows(), meta, Date.now());
+      meta = planned.meta;
+      // small rows first (settings, notes...), the bulky problem history after
+      const queue = [...planned.changes].sort(
+        (a, b) => Number(a.table === "problems") - Number(b.table === "problems"),
+      );
+      const batches: Change[][] = [];
+      for (let i = 0; i < queue.length; i += BATCH) batches.push(queue.slice(i, i + BATCH));
+      if (!batches.length) batches.push([]); // nothing to send: still pull what changed
 
-        const res = reconcile({
-          local: readLocalRaw(),
-          remote: data,
-          meta: stored.meta,
-          now: Date.now(),
-        });
-
-        if (Object.keys(res.pushRemote).length) {
-          const saved = await backend.save(syncKey, { ...data, ...res.pushRemote }, version);
-          if (!saved.ok) {
-            if (saved.conflict) continue; // another computer wrote meanwhile: read again and retry
-            throw new Error(saved.error);
-          }
-        }
-
+      for (const changes of batches) {
+        const { rows, cursor } = await backend.sync(syncKey, { cursor: meta.cursor, first, changes });
+        const pushed = new Set(changes.map((c) => `${c.table}|${c.key}`));
+        const out = applyRows({ local: readLocalRows(), meta, rows, pushed, cursor });
         applying.current = true;
         try {
-          writeLocalRaw(res.writeLocal);
+          writeLocalRows(out.writes);
         } finally {
           applying.current = false;
         }
-        writeMeta({ uid: OWNER, meta: res.meta });
-        lastRun.current = Date.now();
-        setLastSyncedAt(lastRun.current);
-        setStatus("synced");
-        return;
+        meta = out.meta;
+        writeMeta(meta);
       }
-      throw new Error("Another computer kept changing things. Try again in a moment.");
+      lastRun.current = Date.now();
+      setLastSyncedAt(lastRun.current);
+      setStatus("synced");
     } catch (e) {
       if (e instanceof NotConfiguredError) {
         setServerConfigured(false);
@@ -179,11 +176,8 @@ export function useCloud(): CloudState {
     let timer: ReturnType<typeof setTimeout> | undefined;
     const onChange = () => {
       if (applying.current) return;
-      const stored = readMeta();
-      writeMeta({
-        uid: stored.uid,
-        meta: noteLocalChanges(readLocalRaw(), stored.meta, Date.now()),
-      });
+      // note when each edit happened (an edit's age decides who wins), then sync shortly after
+      writeMeta(planChanges(readLocalRows(), readMeta(), Date.now()).meta);
       clearTimeout(timer);
       timer = setTimeout(() => void syncNow(), PUSH_DELAY);
     };

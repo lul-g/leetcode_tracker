@@ -1,17 +1,17 @@
 import "server-only";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { SECTION_IDS, type Remote } from "@/lib/cloud/engine";
+import { canonical } from "@/lib/cloud/canonical";
 import { normalizeKey } from "@/lib/cloud/key";
+import { TABLES, decide, type Row, type Table } from "@/lib/cloud/merge";
 
 /**
- * The cloud copy of your data: one row in Supabase, reached only from this server with the
- * project's secret (service-role) key. The browser never sees that key or talks to Supabase.
+ * Your data in Supabase, as five real tables (see supabase/schema.sql). Reached only from this
+ * server, with the project's secret key; the browser never sees that key or talks to Supabase.
  * The three environment variables (set in Vercel, or .env.local) are read here only.
  */
-const TABLE = "pacer_data";
-const ROW_ID = "me";
-/** Vercel rejects request bodies over 4.5 MB, so stay safely under it. */
+
+// Vercel rejects request bodies over 4.5 MB, so stay safely under it.
 export const MAX_BYTES = 4_000_000;
 
 // Trimmed and unquoted, because a stray space, newline or pair of quotes pasted into a settings
@@ -33,10 +33,7 @@ export function missingConfig(): string[] {
   return missing;
 }
 
-/** Are all three settings present on the server? */
-export function cloudConfigured(): boolean {
-  return missingConfig().length === 0;
-}
+export const cloudConfigured = () => missingConfig().length === 0;
 
 const sha = (s: string) => createHash("sha256").update(s, "utf8");
 
@@ -66,27 +63,24 @@ function db(): SupabaseClient {
   return client;
 }
 
-/** Accept only the shape we write ourselves, so a stolen key can't plant arbitrary data. */
-export function parseSections(input: unknown): Remote | null {
-  if (!input || typeof input !== "object" || Array.isArray(input)) return null;
-  const out: Remote = {};
-  for (const [id, raw] of Object.entries(input as Record<string, unknown>)) {
-    if (!(SECTION_IDS as string[]).includes(id)) return null;
-    const sec = raw as { v?: unknown; at?: unknown };
-    if (!sec || typeof sec !== "object") return null;
-    if (!(sec.v === null || typeof sec.v === "string")) return null;
-    if (typeof sec.at !== "number" || !Number.isFinite(sec.at)) return null;
-    out[id as keyof Remote] = { v: sec.v as string | null, at: sec.at };
-  }
-  return out;
-}
+// ------------------------------------------------------------------------------- the tables
+
+const DEF: Record<Table, { name: string; pk: string }> = {
+  problems: { name: "pacer_problems", pk: "slug" },
+  manual: { name: "pacer_manual_solves", pk: "slug" },
+  notes: { name: "pacer_notes", pk: "slug" },
+  settings: { name: "pacer_settings", pk: "key" },
+  secrets: { name: "pacer_secrets", pk: "name" },
+};
+
+// ------------------------------------------------------------------------ database health
 
 /** How the database check went, in plain categories (never raw errors, which could name your project). */
 export type DbHealth =
   | "ok"
   | "missing_table"
-  | "wrong_role" // the key is the publishable/anon one: it may not touch this table
-  | "no_grants" // the key is the secret one, but the table never granted it access
+  | "wrong_role" // the key is the publishable/anon one: it may not touch these tables
+  | "no_grants" // the key is the secret one, but the tables never granted it access
   | "bad_secret" // Supabase does not recognise the key at all
   | "unreachable"
   | "error";
@@ -107,25 +101,34 @@ function keyKind(key: string | undefined): "publishable" | "secret" | "unknown" 
   return "unknown";
 }
 
+function classify(error: { code?: string; message?: string } | null): DbHealth {
+  if (!error) return "ok";
+  const msg = error.message ?? "";
+  if (error.code === "42P01" || error.code === "PGRST205" || /does not exist|schema cache|could not find the table/i.test(msg))
+    return "missing_table";
+  if (error.code === "42501" || /permission denied|row-level security|not allowed/i.test(msg))
+    // a publishable key is simply the wrong key; anything else was refused for lack of a grant
+    return keyKind(env().key) === "publishable" ? "wrong_role" : "no_grants";
+  if (/invalid api key|jwt|apikey|unauthori[sz]ed|no api key/i.test(msg)) return "bad_secret";
+  if (/fetch failed|enotfound|econnrefused|network|timed? ?out|getaddrinfo|invalid url/i.test(msg))
+    return "unreachable";
+  return "error";
+}
+
 let healthCache: { at: number; v: DbHealth } | null = null;
 
-/** One cheap query to see whether Pacer can really reach its table. Cached for 30 seconds. */
+/** One cheap query per table to see whether Pacer can really reach them. Cached for 30 seconds. */
 export async function dbHealth(): Promise<DbHealth> {
   if (healthCache && Date.now() - healthCache.at < 30_000) return healthCache.v;
-  let v: DbHealth;
+  let v: DbHealth = "ok";
   try {
-    const { error } = await db().from(TABLE).select("id").limit(1);
-    const msg = error?.message ?? "";
-    if (!error) v = "ok";
-    else if (error.code === "42P01" || error.code === "PGRST205" || /does not exist|schema cache|could not find the table/i.test(msg))
-      v = "missing_table";
-    else if (error.code === "42501" || /permission denied|row-level security|not allowed/i.test(msg))
-      // a publishable key is simply the wrong key; anything else was refused for lack of a grant
-      v = keyKind(env().key) === "publishable" ? "wrong_role" : "no_grants";
-    else if (/invalid api key|jwt|apikey|unauthori[sz]ed|no api key/i.test(msg)) v = "bad_secret";
-    else if (/fetch failed|enotfound|econnrefused|network|timed? ?out|getaddrinfo|invalid url/i.test(msg))
-      v = "unreachable";
-    else v = "error";
+    const results = await Promise.all(
+      TABLES.map(async (t) => {
+        const { error } = await db().from(DEF[t].name).select(DEF[t].pk).limit(1);
+        return classify(error);
+      }),
+    );
+    v = results.find((r) => r !== "ok") ?? "ok";
   } catch {
     v = "unreachable";
   }
@@ -133,45 +136,209 @@ export async function dbHealth(): Promise<DbHealth> {
   return v;
 }
 
-export async function loadRow(): Promise<{ data: Remote; version: string | null }> {
-  const { data, error } = await db()
-    .from(TABLE)
-    .select("data, updated_at")
-    .eq("id", ROW_ID);
-  if (error) throw new Error(error.message);
-  const row = data?.[0];
-  return { data: (row?.data ?? {}) as Remote, version: row?.updated_at ?? null };
+// -------------------------------------------------------------------------- reading/writing
+
+type DbRow = Record<string, unknown>;
+
+export type RemoteRow = { table: Table; key: string; value: string | null };
+
+export type InChange = {
+  table: Table;
+  key: string;
+  value: string | null;
+  editedAt: number;
+};
+
+const DIFFICULTIES = new Set(["easy", "medium", "hard"]);
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** A stored row as the text this app uses (canonical JSON, null = deleted). */
+function toRow(table: Table, r: DbRow): Row {
+  const editedAt = Number(r.edited_at ?? 0);
+  if (table === "problems") return { value: canonical(r.submissions ?? []), editedAt };
+  if (r.deleted) return { value: null, editedAt };
+  switch (table) {
+    case "manual":
+      return {
+        value: canonical({
+          slug: r.slug,
+          title: r.title,
+          number: r.number,
+          difficulty: r.difficulty,
+          solvedAt: r.solved_on,
+        }),
+        editedAt,
+      };
+    case "notes":
+      return { value: canonical({ note: r.note, review: r.needs_review }), editedAt };
+    default:
+      return { value: canonical(r.value ?? null), editedAt };
+  }
 }
 
-export type SaveOutcome =
-  | { ok: true; version: string }
-  | { ok: false; conflict: true }
-  | { ok: false; conflict?: false; error: string };
-
-/** Write only if nobody else has since `version` (null = the row doesn't exist yet). */
-export async function saveRow(data: Remote, version: string | null): Promise<SaveOutcome> {
-  const now = new Date().toISOString();
-  if (version === null) {
-    const { data: rows, error } = await db()
-      .from(TABLE)
-      .insert({ id: ROW_ID, data, updated_at: now })
-      .select("updated_at");
-    // 23505: another computer created the row first
-    if (error) {
-      return error.code === "23505"
-        ? { ok: false, conflict: true }
-        : { ok: false, error: error.message };
-    }
-    return { ok: true, version: rows![0].updated_at };
+/** Is this change one we're willing to store? Checked before anything is written. */
+export function validChange(c: InChange): boolean {
+  if (!c || typeof c !== "object") return false;
+  if (!(TABLES as readonly string[]).includes(c.table)) return false;
+  if (typeof c.key !== "string" || !c.key || c.key.length > 300) return false;
+  if (typeof c.editedAt !== "number" || !Number.isFinite(c.editedAt)) return false;
+  if (c.value === null) return true;
+  if (typeof c.value !== "string") return false;
+  let v: unknown;
+  try {
+    v = JSON.parse(c.value);
+  } catch {
+    return false;
   }
-  const { data: rows, error } = await db()
-    .from(TABLE)
-    .update({ data, updated_at: now })
-    .eq("id", ROW_ID)
-    .eq("updated_at", version)
-    .select("updated_at");
-  if (error) return { ok: false, error: error.message };
-  // nothing matched: another computer wrote since this one read
-  if (!rows || rows.length === 0) return { ok: false, conflict: true };
-  return { ok: true, version: rows[0].updated_at };
+  if (c.table === "problems") return Array.isArray(v);
+  if (c.table === "manual") {
+    const m = v as { title?: unknown; difficulty?: unknown; solvedAt?: unknown; number?: unknown } | null;
+    return (
+      !!m &&
+      typeof m.title === "string" &&
+      DIFFICULTIES.has(String(m.difficulty)) &&
+      typeof m.solvedAt === "string" &&
+      DATE.test(m.solvedAt) &&
+      (m.number === undefined || typeof m.number === "number")
+    );
+  }
+  if (c.table === "notes") {
+    const n = v as { note?: unknown; review?: unknown } | null;
+    return !!n && typeof n.note === "string" && typeof n.review === "boolean";
+  }
+  return true;
+}
+
+/** The database row to store for a decision (null when there's nothing to store). */
+function toDb(
+  table: Table,
+  key: string,
+  result: Row,
+  existing: DbRow | undefined,
+  nowIso: string,
+): DbRow | null {
+  const pk = DEF[table].pk;
+  const base = { [pk]: key, edited_at: result.editedAt, updated_at: nowIso };
+
+  if (table === "problems") {
+    const subs = (JSON.parse(result.value ?? "[]") as { t: number; ok: boolean }[]) ?? [];
+    const accepted = subs.filter((s) => s.ok);
+    const first = accepted.length ? Math.min(...accepted.map((s) => s.t)) : null;
+    return {
+      ...base,
+      number: existing?.number ?? null,
+      title: existing?.title ?? null,
+      difficulty: existing?.difficulty ?? null,
+      first_accepted_at: first === null ? null : new Date(first * 1000).toISOString(),
+      accepted_count: accepted.length,
+      attempt_count: subs.length,
+      submissions: subs,
+    };
+  }
+
+  // a delete: mark the row, keep the rest (nothing to mark if it never existed)
+  if (result.value === null) {
+    return existing ? { ...existing, deleted: true, edited_at: result.editedAt, updated_at: nowIso } : null;
+  }
+  const v = JSON.parse(result.value);
+  switch (table) {
+    case "manual":
+      return {
+        ...base,
+        title: v.title,
+        number: v.number ?? 0,
+        difficulty: v.difficulty,
+        solved_on: v.solvedAt,
+        deleted: false,
+      };
+    case "notes":
+      return { ...base, note: v.note, needs_review: v.review, deleted: false };
+    default:
+      return { ...base, value: v, deleted: false };
+  }
+}
+
+const CHUNK = 100;
+
+async function fetchExisting(table: Table, keys: string[]): Promise<Map<string, DbRow>> {
+  const { name, pk } = DEF[table];
+  const found = new Map<string, DbRow>();
+  for (let i = 0; i < keys.length; i += CHUNK) {
+    const { data, error } = await db().from(name).select("*").in(pk, keys.slice(i, i + CHUNK));
+    if (error) throw new Error(error.message);
+    for (const r of data ?? []) found.set(String(r[pk]), r);
+  }
+  return found;
+}
+
+/**
+ * Apply rows a computer sent, one rule per table (see decide). Returns the final state of every row
+ * it was asked about, so the computer can adopt whatever the cloud decided.
+ */
+export async function applyChanges(changes: InChange[], first: boolean): Promise<RemoteRow[]> {
+  const nowIso = new Date().toISOString();
+  const out: RemoteRow[] = [];
+
+  for (const table of TABLES) {
+    const mine = changes.filter((c) => c.table === table);
+    if (!mine.length) continue;
+    const { name, pk } = DEF[table];
+    const existing = await fetchExisting(table, mine.map((c) => c.key));
+    const writes: DbRow[] = [];
+
+    for (const c of mine) {
+      const ex = existing.get(c.key);
+      const d = decide(
+        table,
+        ex ? toRow(table, ex) : undefined,
+        { value: c.value, editedAt: Math.min(c.editedAt, Date.now() + 60_000) },
+        first,
+      );
+      if (d.write) {
+        const row = toDb(table, c.key, d.result, ex, nowIso);
+        if (row) writes.push(row);
+      }
+      out.push({ table, key: c.key, value: d.result.value });
+    }
+    for (let i = 0; i < writes.length; i += 200) {
+      const { error } = await db().from(name).upsert(writes.slice(i, i + 200), { onConflict: pk });
+      if (error) throw new Error(error.message);
+    }
+  }
+  return out;
+}
+
+const PAGE = 1000;
+/** Re-read this much before the newest row we've seen, in case a slower instance stamped a row late. */
+const OVERLAP_MS = 5000;
+
+/** Every row changed at or after `cursor` (all rows when null), plus the new cursor. */
+export async function readSince(
+  cursor: string | null,
+): Promise<{ rows: RemoteRow[]; cursor: string | null }> {
+  const rows: RemoteRow[] = [];
+  let newest = 0;
+
+  for (const table of TABLES) {
+    const { name, pk } = DEF[table];
+    for (let from = 0; ; from += PAGE) {
+      let q = db()
+        .from(name)
+        .select("*")
+        .order("updated_at", { ascending: true })
+        .order(pk, { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (cursor) q = q.gte("updated_at", cursor);
+      const { data, error } = await q;
+      if (error) throw new Error(error.message);
+      for (const r of data ?? []) {
+        rows.push({ table, key: String(r[pk]), value: toRow(table, r).value });
+        newest = Math.max(newest, new Date(String(r.updated_at)).getTime());
+      }
+      if ((data?.length ?? 0) < PAGE) break;
+    }
+  }
+  // never null once a sync has happened, so a computer can tell "met the cloud" from "never synced"
+  const next = newest ? new Date(newest - OVERLAP_MS).toISOString() : (cursor ?? new Date(0).toISOString());
+  return { rows, cursor: next };
 }

@@ -1,11 +1,6 @@
-import type { Remote } from "./engine";
+import type { RemoteRow } from "./engine";
 import { keyToken } from "./key";
-import {
-  BadKeyError,
-  NotConfiguredError,
-  type CloudBackend,
-  type SaveResult,
-} from "./types";
+import { BadKeyError, NotConfiguredError, type CloudBackend } from "./types";
 
 /** Is cloud sync set up on the server, and if not, which settings are missing (names only)? Needs no key. */
 export type DbHealth =
@@ -58,29 +53,18 @@ export function createHttpBackend(): CloudBackend {
   }
 
   return {
-    async load(key) {
-      const res = await call({ headers: await headers(key) });
+    async sync(key, body) {
+      const res = await call({
+        method: "POST",
+        headers: await headers(key),
+        body: JSON.stringify(body),
+      });
       const json = (await res.json().catch(() => null)) as
-        | { ok: true; data: Remote; version: string | null }
+        | { ok: true; rows: RemoteRow[]; cursor: string | null }
         | { ok: false; error: string }
         | null;
       if (!json || !json.ok) throw new Error(json && !json.ok ? json.error : "Bad reply.");
-      return { data: json.data ?? {}, version: json.version };
-    },
-
-    async save(key, data, version): Promise<SaveResult> {
-      const res = await call({
-        method: "PUT",
-        headers: await headers(key),
-        body: JSON.stringify({ data, version }),
-      });
-      if (res.status === 409) return { ok: false, conflict: true };
-      const json = (await res.json().catch(() => null)) as
-        | { ok: true; version: string }
-        | { ok: false; error: string }
-        | null;
-      if (json && json.ok) return { ok: true, version: json.version };
-      return { ok: false, error: json && !json.ok ? json.error : "Bad reply." };
+      return { rows: json.rows, cursor: json.cursor };
     },
   };
 }

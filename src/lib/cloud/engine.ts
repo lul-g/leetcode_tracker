@@ -1,162 +1,120 @@
+import { ABSENT, hashStr } from "./canonical";
+import { TABLES, type Table } from "./merge";
+
 /**
- * The merge rules for cloud sync, as pure functions so they can be tested without a browser
- * or a database. Nothing in here touches storage or the network.
+ * The client half of delta sync, as pure functions (no storage, no network).
  *
- * Data is split into a few "sections" (settings, layout, manual solves, notes, your completed
- * problems' submissions, cookie). Each
- * section is stored as a raw JSON string and carries the time it last changed. A device keeps a
- * `Meta` of what it last agreed on with the cloud, which is how it tells "I changed this" from
- * "the cloud changed this".
+ * This computer's data is seen as rows: `local[table][key]` is a row's canonical text, or missing
+ * if the row doesn't exist. `Meta` remembers, per row, a fingerprint of what this computer and the
+ * cloud last agreed on, which is how a local edit is told from a change that came from the cloud.
+ * Only rows that changed are sent, and only rows that changed in the cloud come back.
  */
-
-export type SectionId = "settings" | "layout" | "manual" | "notes" | "submissions" | "cookie";
-
-export const SECTION_IDS: SectionId[] = [
-  "settings",
-  "layout",
-  "manual",
-  "notes",
-  "submissions",
-  "cookie",
-];
-
-/** Maps where two devices adding different entries should keep both. */
-const MERGEABLE = new Set<SectionId>(["manual", "notes", "submissions"]);
-
-export type RemoteSection = { v: string | null; at: number };
-export type Remote = Partial<Record<SectionId, RemoteSection>>;
-export type LocalRaw = Record<SectionId, string | null>;
+export type RowMap = Record<Table, Record<string, string>>;
 
 export type Meta = {
-  /** the cloud timestamp this device last agreed on, per section */
-  at: Partial<Record<SectionId, number>>;
-  /** the raw value both sides had at that moment */
-  snap: Partial<Record<SectionId, string | null>>;
-  /** when a local change to a section was first noticed */
-  edited: Partial<Record<SectionId, number>>;
+  /** the cloud position this computer has read up to (null = never synced) */
+  cursor: string | null;
+  /** per row: fingerprint of the value last agreed with the cloud */
+  snap: Record<Table, Record<string, string>>;
+  /** per row: when a local change to it was first noticed (ms) */
+  edited: Record<Table, Record<string, number>>;
 };
 
-export const emptyMeta = (): Meta => ({ at: {}, snap: {}, edited: {} });
+const blank = <T>(): Record<Table, Record<string, T>> =>
+  Object.fromEntries(TABLES.map((t) => [t, {}])) as Record<Table, Record<string, T>>;
 
-/** Note when each section changed locally, and forget it again once a section matches the last sync. */
-export function noteLocalChanges(local: LocalRaw, meta: Meta, now: number): Meta {
-  const edited = { ...meta.edited };
-  for (const s of SECTION_IDS) {
-    const changed = (local[s] ?? null) !== (meta.snap[s] ?? null);
-    if (changed && edited[s] === undefined) edited[s] = now;
-    if (!changed) delete edited[s];
-  }
-  return { ...meta, edited };
-}
+export const emptyRows = (): RowMap => blank<string>();
+export const emptyMeta = (): Meta => ({ cursor: null, snap: blank<string>(), edited: blank<number>() });
 
-function parseMap(raw: string | null): Record<string, unknown> {
-  if (!raw) return {};
-  try {
-    const v = JSON.parse(raw);
-    return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
-  } catch {
-    return {};
-  }
-}
+/** Is this the first time this computer is meeting the cloud? */
+export const isFirstSync = (meta: Meta) => meta.cursor === null;
 
-/** Union of two maps. On the same key, `preferLocal` decides whose entry wins. */
-export function mergeMaps(local: string | null, remote: string | null, preferLocal: boolean) {
-  const l = parseMap(local);
-  const r = parseMap(remote);
-  const merged = preferLocal ? { ...r, ...l } : { ...l, ...r };
-  return Object.keys(merged).length ? JSON.stringify(merged) : null;
-}
+const fp = (v: string | null | undefined) => (v == null ? ABSENT : hashStr(v));
 
-/**
- * Submissions, keyed by problem slug: for each problem keep every submission either side knows
- * about (matched by submission id), oldest first. Nothing downloaded is ever dropped.
- */
-export function mergeSubmissions(local: string | null, remote: string | null) {
-  const l = parseMap(local) as Record<string, { id: string; t: number }[]>;
-  const r = parseMap(remote) as Record<string, { id: string; t: number }[]>;
-  const out: Record<string, { id: string; t: number }[]> = {};
-  for (const slug of new Set([...Object.keys(l), ...Object.keys(r)])) {
-    const byId = new Map<string, { id: string; t: number }>();
-    for (const sub of [...(r[slug] ?? []), ...(l[slug] ?? [])]) byId.set(sub.id, sub);
-    out[slug] = [...byId.values()].sort((a, b) => a.t - b.t);
-  }
-  return Object.keys(out).length ? JSON.stringify(out) : null;
-}
-
-export type Result = {
-  /** values to write into this browser's storage */
-  writeLocal: Partial<Record<SectionId, string | null>>;
-  /** sections to store in the cloud */
-  pushRemote: Remote;
-  meta: Meta;
+export type Change = {
+  table: Table;
+  key: string;
+  /** canonical text, or null to delete */
+  value: string | null;
+  /** when the edit happened, ms */
+  editedAt: number;
 };
 
-/**
- * Decide, section by section, what to take from the cloud and what to send to it.
- *
- *  - only the cloud changed  -> take it
- *  - only this device changed -> send it
- *  - both changed            -> maps (manual solves, notes) are merged so nothing is lost;
- *                               anything else goes to whichever edit is newer, except the very
- *                               first time a device meets the cloud, when the cloud wins so a
- *                               fresh computer can never wipe the data you already saved.
- */
-export function reconcile(input: {
-  local: LocalRaw;
-  remote: Remote;
-  meta: Meta;
-  now: number;
-}): Result {
-  const { local, remote, now } = input;
-  const meta = noteLocalChanges(local, input.meta, now);
-  const out: Result = { writeLocal: {}, pushRemote: {}, meta: { at: { ...meta.at }, snap: { ...meta.snap }, edited: { ...meta.edited } } };
+/** Rows that changed here since the last agreement. Also notes when each change was first seen. */
+export function planChanges(
+  local: RowMap,
+  metaIn: Meta,
+  now: number,
+): { changes: Change[]; meta: Meta } {
+  const meta: Meta = {
+    cursor: metaIn.cursor,
+    snap: structuredClone(metaIn.snap),
+    edited: structuredClone(metaIn.edited),
+  };
+  const changes: Change[] = [];
 
-  for (const s of SECTION_IDS) {
-    const l = local[s] ?? null;
-    const snap = meta.snap[s] ?? null;
-    const changed = l !== snap;
-    const r = remote[s];
-    const remoteAt = r?.at ?? 0;
-    const known = meta.at[s] ?? 0;
-    const remoteNewer = remoteAt > known;
-    const editedAt = meta.edited[s] ?? now;
-
-    const take = (v: string | null, at: number) => {
-      if (v !== l) out.writeLocal[s] = v;
-      out.meta.at[s] = at;
-      out.meta.snap[s] = v;
-      delete out.meta.edited[s];
-    };
-    const send = (v: string | null, at: number) => {
-      out.pushRemote[s] = { v, at };
-      out.meta.at[s] = at;
-      out.meta.snap[s] = v;
-      delete out.meta.edited[s];
-    };
-
-    if (!changed && !remoteNewer) continue;
-
-    if (!changed && remoteNewer) {
-      take(r!.v, remoteAt);
-    } else if (changed && !remoteNewer) {
-      send(l, Math.max(editedAt, remoteAt + 1));
-    } else {
-      // both sides changed
-      const neverSynced = meta.at[s] === undefined;
-      if (MERGEABLE.has(s)) {
-        const merged =
-          s === "submissions"
-            ? mergeSubmissions(l, r!.v)
-            : mergeMaps(l, r!.v, editedAt >= remoteAt);
-        const at = Math.max(now, remoteAt + 1);
-        if (merged !== l) out.writeLocal[s] = merged;
-        send(merged, at);
-      } else if (neverSynced || editedAt <= remoteAt) {
-        take(r!.v, remoteAt);
-      } else {
-        send(l, Math.max(editedAt, remoteAt + 1));
+  for (const table of TABLES) {
+    const keys = new Set([...Object.keys(local[table]), ...Object.keys(meta.snap[table])]);
+    for (const key of keys) {
+      const value = local[table][key] ?? null;
+      if (fp(value) === (meta.snap[table][key] ?? ABSENT)) {
+        delete meta.edited[table][key];
+        continue;
       }
+      // downloaded problems are never deleted from the cloud
+      if (table === "problems" && value === null) continue;
+      const editedAt = meta.edited[table][key] ?? now;
+      meta.edited[table][key] = editedAt;
+      changes.push({ table, key, value, editedAt });
     }
   }
-  return out;
+  return { changes, meta };
+}
+
+export type RemoteRow = { table: Table; key: string; value: string | null };
+export type Write = { table: Table; key: string; value: string | null };
+
+/**
+ * Fold rows from the cloud into this computer. `pushed` are the rows this computer just sent: the
+ * cloud's answer for them is final (it may have merged or declined the edit), so it wins. For
+ * every other row the cloud's version is taken unless it was edited here in the meantime.
+ */
+export function applyRows(input: {
+  local: RowMap;
+  meta: Meta;
+  rows: RemoteRow[];
+  pushed: Set<string>;
+  cursor: string | null;
+}): { writes: Write[]; meta: Meta } {
+  const { local, rows, pushed } = input;
+  const meta: Meta = {
+    cursor: input.cursor ?? input.meta.cursor,
+    snap: structuredClone(input.meta.snap),
+    edited: structuredClone(input.meta.edited),
+  };
+  const writes: Write[] = [];
+
+  for (const r of rows) {
+    const id = `${r.table}|${r.key}`;
+    const here = local[r.table][r.key] ?? null;
+    const agreed = fp(r.value);
+
+    if (pushed.has(id)) {
+      if (here !== r.value) writes.push({ table: r.table, key: r.key, value: r.value });
+      meta.snap[r.table][r.key] = agreed;
+      delete meta.edited[r.table][r.key];
+      continue;
+    }
+    // edited here since we last agreed: leave it, it will be sent next time
+    if (fp(here) !== (meta.snap[r.table][r.key] ?? ABSENT)) continue;
+    if (here !== r.value) writes.push({ table: r.table, key: r.key, value: r.value });
+    meta.snap[r.table][r.key] = agreed;
+  }
+  // forget rows that are gone on both sides
+  for (const table of TABLES) {
+    for (const key of Object.keys(meta.snap[table])) {
+      if (meta.snap[table][key] === ABSENT) delete meta.snap[table][key];
+    }
+  }
+  return { writes, meta };
 }

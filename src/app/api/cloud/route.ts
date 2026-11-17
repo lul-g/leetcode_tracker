@@ -1,13 +1,15 @@
 import { connection } from "next/server";
 import {
   MAX_BYTES,
+  applyChanges,
   cloudConfigured,
   dbHealth,
-  loadRow,
   missingConfig,
-  parseSections,
-  saveRow,
+  readSince,
   syncKeyMatches,
+  validChange,
+  type InChange,
+  type RemoteRow,
 } from "@/server/cloud-store";
 
 /**
@@ -35,58 +37,63 @@ function guard(req: Request): Response | null {
   return null;
 }
 
-/** `?status` says whether the server is set up (no key needed). Otherwise returns your data. */
+/** `?status` says whether the server is set up (no key needed). */
 export async function GET(req: Request) {
   await connection();
-  if (new URL(req.url).searchParams.has("status")) {
-    const configured = cloudConfigured();
-    return Response.json({
-      ok: true,
-      configured,
-      missing: missingConfig(),
-      // only when everything is set: can the server actually reach its table?
-      ...(configured ? { db: await dbHealth() } : {}),
-    });
-  }
+  const configured = cloudConfigured();
+  return Response.json({
+    ok: true,
+    configured,
+    missing: missingConfig(),
+    // only when everything is set: can the server actually reach its tables?
+    ...(configured && new URL(req.url).searchParams.has("status") ? { db: await dbHealth() } : {}),
+  });
+}
+
+/**
+ * One sync: store the rows this computer changed, then return every row that changed in the cloud
+ * since `cursor`. `rows` for rows just sent are the cloud's final answer for them.
+ */
+export async function POST(req: Request) {
   const denied = guard(req);
   if (denied) return denied;
+
+  const text = await req.text();
+  if (text.length > MAX_BYTES) {
+    return Response.json({ ok: false, error: "That batch is too big to sync in one go." }, { status: 413 });
+  }
+  let body: { cursor?: unknown; first?: unknown; changes?: unknown };
   try {
-    return Response.json({ ok: true, configured: true, ...(await loadRow()) });
+    body = JSON.parse(text);
+  } catch {
+    return Response.json({ ok: false, error: "Bad request." }, { status: 400 });
+  }
+  const changes = body.changes as InChange[];
+  if (
+    !(body.cursor === null || typeof body.cursor === "string") ||
+    typeof body.first !== "boolean" ||
+    !Array.isArray(changes) ||
+    changes.length > 5000 ||
+    !changes.every(validChange)
+  ) {
+    return Response.json({ ok: false, error: "Bad request." }, { status: 400 });
+  }
+  if (typeof body.cursor === "string" && Number.isNaN(Date.parse(body.cursor))) {
+    return Response.json({ ok: false, error: "Bad request." }, { status: 400 });
+  }
+
+  try {
+    const final = await applyChanges(changes, body.first);
+    const delta = await readSince(body.cursor as string | null);
+    // the answer for rows just sent wins over what the delta says
+    const byId = new Map<string, RemoteRow>();
+    for (const r of delta.rows) byId.set(`${r.table}|${r.key}`, r);
+    for (const r of final) byId.set(`${r.table}|${r.key}`, r);
+    return Response.json({ ok: true, rows: [...byId.values()], cursor: delta.cursor });
   } catch (e) {
     return Response.json(
       { ok: false, configured: true, error: e instanceof Error ? e.message : "Database error." },
       { status: 502 },
     );
   }
-}
-
-/** Store your data, but only if nobody else has changed it since `version`. */
-export async function PUT(req: Request) {
-  const denied = guard(req);
-  if (denied) return denied;
-
-  const text = await req.text();
-  if (text.length > MAX_BYTES) {
-    return Response.json(
-      { ok: false, error: "Your data is too big to sync in one go (over 4 MB)." },
-      { status: 413 },
-    );
-  }
-  let body: { data?: unknown; version?: unknown };
-  try {
-    body = JSON.parse(text);
-  } catch {
-    return Response.json({ ok: false, error: "Bad request." }, { status: 400 });
-  }
-  const data = parseSections(body.data);
-  if (!data || !(body.version === null || typeof body.version === "string")) {
-    return Response.json({ ok: false, error: "Bad request." }, { status: 400 });
-  }
-
-  const result = await saveRow(data, body.version as string | null);
-  if (result.ok) return Response.json({ ok: true, version: result.version });
-  if (result.conflict) {
-    return Response.json({ ok: false, conflict: true, error: "Changed elsewhere." }, { status: 409 });
-  }
-  return Response.json({ ok: false, error: result.error }, { status: 502 });
 }

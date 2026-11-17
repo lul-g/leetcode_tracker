@@ -24,8 +24,10 @@ words is fine) and don't share it.
 1. **Create a project** at <https://supabase.com> (the free plan is enough). In the security
    options keep **Enable Data API** and **Enable automatic RLS** checked, and **uncheck
    "Automatically expose new tables"** (Supabase recommends it; Pacer doesn't need it).
-2. **Create the table.** *SQL Editor*: paste [`supabase/schema.sql`](../supabase/schema.sql) and
-   click *Run*.
+2. **Create the tables.** *SQL Editor*: paste [`supabase/schema.sql`](../supabase/schema.sql) and
+   click *Run*. Your data lands in five real tables you can browse in *Table Editor*:
+   `pacer_problems` (one row per solved problem, with every submission), `pacer_manual_solves`,
+   `pacer_notes`, `pacer_settings` (goal, dates, layout) and `pacer_secrets` (your cookie).
 3. **Copy two values** from *Project Settings, API*:
    - the **Project URL**
    - the **secret key** (called `service_role` or `secret`). This one is powerful: never paste it
@@ -44,23 +46,30 @@ words is fine) and don't share it.
 
 ## How it behaves
 
+- Only what changed travels. Editing one note sends one row; a new submission sends that one
+  problem's row; a computer that is up to date sends and receives nothing. Rows are matched by
+  problem, so a big history is never re-uploaded.
 - Edits are sent a few seconds after you make them. Other computers pick them up when you open or
   return to the app, or when you press *Sync now* in *Settings, Sync*.
 - If two computers change things at the same time, solves, notes and downloaded submissions from
-  both are kept (nothing is lost). For everything else (goal, dates, layout, cookie) the most
-  recent edit wins.
+  both are kept (nothing is lost): each row is merged on its own. If both edit the *same* row (the
+  same note, say), the later edit wins. Submissions are merged by their id and never deleted.
+- Removing a solve or note marks its row as deleted (`deleted = true`) so other computers learn
+  about it; the row is not erased.
 - The first time a computer that already has data connects, the cloud's goal, layout and cookie win
   so a fresh computer can never wipe what you saved; solves, notes and submissions are merged.
 - *Remove key* stops syncing on that computer and keeps its data.
-- The whole synced document must stay under about 4 MB (a few thousand problems is far below it).
 
 ## Troubleshooting
 
 - **"Cloud sync isn't set up on the server"**: one of the three variables is missing, or Vercel
   hasn't been redeployed since you added them.
 - **"That sync key isn't right"**: the key typed in the app must match `PACER_SYNC_KEY` exactly.
-- **"permission denied for table pacer_data"**: the SQL grant is missing (it is part of the current
-  `supabase/schema.sql`). Run `grant select, insert, update on table public.pacer_data to
-  service_role;` in the SQL Editor. This happens when "Automatically expose new tables" is off.
+- **"The tables haven't given the server access yet"** (permission denied): the SQL grant is part
+  of `supabase/schema.sql`; run the whole file again. It happens when "Automatically expose new
+  tables" is off.
+- **Upgrading from the first version** (a single `pacer_data` table): run the new
+  `supabase/schema.sql`, then on the first computer press *Sync now* after re-entering the key. The
+  old table is no longer used; `drop table public.pacer_data;` removes it once you're happy.
 - **Other database errors**: check that the SQL in step 2 ran, and that `SUPABASE_URL` and the
   secret key are from the same project.

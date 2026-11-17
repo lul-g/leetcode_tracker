@@ -8,11 +8,12 @@ import { Input } from "@/components/ui/input";
 import { useApp } from "@/lib/app-context";
 import { timeAgo } from "@/lib/time-ago";
 
-const GRANT_SQL = "grant select, insert, update on table public.pacer_data to service_role;";
+const GRANT_SQL =
+  "grant select, insert, update on table public.pacer_problems, public.pacer_manual_solves, public.pacer_notes, public.pacer_settings, public.pacer_secrets to service_role;";
 
 const DB_PROBLEMS: Record<string, { title: string; fix: React.ReactNode }> = {
   missing_table: {
-    title: "The database table isn't there yet",
+    title: "The database tables aren't there yet",
     fix: (
       <>
         In Supabase open the <b>SQL Editor</b> and run the contents of{" "}
