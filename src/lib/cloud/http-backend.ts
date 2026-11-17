@@ -8,13 +8,23 @@ import {
 } from "./types";
 
 /** Is cloud sync set up on the server, and if not, which settings are missing (names only)? Needs no key. */
-export async function fetchStatus(): Promise<{ configured: boolean; missing: string[] }> {
+export type DbHealth = "ok" | "missing_table" | "bad_secret" | "unreachable" | "error";
+
+export async function fetchStatus(): Promise<{
+  configured: boolean;
+  missing: string[];
+  db: DbHealth | null;
+}> {
   try {
     const res = await fetch("/api/cloud?status", { cache: "no-store" });
-    const json = (await res.json()) as { configured?: boolean; missing?: string[] };
-    return { configured: !!json.configured, missing: json.missing ?? [] };
+    const json = (await res.json()) as {
+      configured?: boolean;
+      missing?: string[];
+      db?: DbHealth;
+    };
+    return { configured: !!json.configured, missing: json.missing ?? [], db: json.db ?? null };
   } catch {
-    return { configured: false, missing: [] };
+    return { configured: false, missing: [], db: null };
   }
 }
 

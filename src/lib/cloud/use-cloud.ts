@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useStored, writeStore } from "@/lib/local-store";
 import { emptyMeta, noteLocalChanges, reconcile } from "./engine";
-import { createHttpBackend, fetchStatus } from "./http-backend";
+import { createHttpBackend, fetchStatus, type DbHealth } from "./http-backend";
 import {
   CHANGE_EVENTS,
   SYNC_KEY_STORE,
@@ -28,6 +28,8 @@ export type CloudState = {
   serverConfigured: boolean | null;
   /** names of the server settings that are missing, when sync isn't set up */
   missing: string[];
+  /** can the server reach its table? null until known or when sync isn't set up */
+  db: DbHealth | null;
   hasKey: boolean;
   status: CloudStatus;
   error: string | null;
@@ -55,6 +57,7 @@ export function useCloud(): CloudState {
 
   const [serverConfigured, setServerConfigured] = useState<boolean | null>(null);
   const [missing, setMissing] = useState<string[]>([]);
+  const [db, setDb] = useState<DbHealth | null>(null);
   const [status, setStatus] = useState<CloudStatus>("checking");
   const [error, setError] = useState<string | null>(null);
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
@@ -149,6 +152,7 @@ export function useCloud(): CloudState {
       if (!alive) return;
       setServerConfigured(s.configured);
       setMissing(s.missing);
+      setDb(s.db);
       if (!s.configured) setStatus("unconfigured");
     });
     return () => {
@@ -224,6 +228,7 @@ export function useCloud(): CloudState {
   return {
     serverConfigured,
     missing,
+    db,
     hasKey,
     status,
     error,

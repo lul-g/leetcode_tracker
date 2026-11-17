@@ -2,6 +2,7 @@ import { connection } from "next/server";
 import {
   MAX_BYTES,
   cloudConfigured,
+  dbHealth,
   loadRow,
   missingConfig,
   parseSections,
@@ -38,7 +39,14 @@ function guard(req: Request): Response | null {
 export async function GET(req: Request) {
   await connection();
   if (new URL(req.url).searchParams.has("status")) {
-    return Response.json({ ok: true, configured: cloudConfigured(), missing: missingConfig() });
+    const configured = cloudConfigured();
+    return Response.json({
+      ok: true,
+      configured,
+      missing: missingConfig(),
+      // only when everything is set: can the server actually reach its table?
+      ...(configured ? { db: await dbHealth() } : {}),
+    });
   }
   const denied = guard(req);
   if (denied) return denied;

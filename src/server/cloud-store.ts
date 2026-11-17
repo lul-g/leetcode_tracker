@@ -80,6 +80,33 @@ export function parseSections(input: unknown): Remote | null {
   return out;
 }
 
+/** How the database check went, in plain categories (never raw errors, which could name your project). */
+export type DbHealth = "ok" | "missing_table" | "bad_secret" | "unreachable" | "error";
+
+let healthCache: { at: number; v: DbHealth } | null = null;
+
+/** One cheap query to see whether Pacer can really reach its table. Cached for 30 seconds. */
+export async function dbHealth(): Promise<DbHealth> {
+  if (healthCache && Date.now() - healthCache.at < 30_000) return healthCache.v;
+  let v: DbHealth;
+  try {
+    const { error } = await db().from(TABLE).select("id").limit(1);
+    const msg = error?.message ?? "";
+    if (!error) v = "ok";
+    else if (error.code === "42P01" || error.code === "PGRST205" || /does not exist|schema cache|could not find the table/i.test(msg))
+      v = "missing_table";
+    else if (/invalid api key|jwt|apikey|unauthori[sz]ed|permission denied|not allowed/i.test(msg))
+      v = "bad_secret";
+    else if (/fetch failed|enotfound|econnrefused|network|timed? ?out|getaddrinfo|invalid url/i.test(msg))
+      v = "unreachable";
+    else v = "error";
+  } catch {
+    v = "unreachable";
+  }
+  healthCache = { at: Date.now(), v };
+  return v;
+}
+
 export async function loadRow(): Promise<{ data: Remote; version: string | null }> {
   const { data, error } = await db()
     .from(TABLE)

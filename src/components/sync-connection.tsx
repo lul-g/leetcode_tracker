@@ -8,6 +8,58 @@ import { Input } from "@/components/ui/input";
 import { useApp } from "@/lib/app-context";
 import { timeAgo } from "@/lib/time-ago";
 
+const DB_PROBLEMS: Record<string, { title: string; fix: React.ReactNode }> = {
+  missing_table: {
+    title: "The database table isn't there yet",
+    fix: (
+      <>
+        In Supabase open the <b>SQL Editor</b> and run the contents of{" "}
+        <code>supabase/schema.sql</code>.
+      </>
+    ),
+  },
+  bad_secret: {
+    title: "Supabase refused the secret key",
+    fix: (
+      <>
+        <code>SUPABASE_SERVICE_ROLE_KEY</code> must be the project&apos;s <b>secret</b> (or
+        service_role) key, not the publishable/anon one, and from the same project as{" "}
+        <code>SUPABASE_URL</code>.
+      </>
+    ),
+  },
+  unreachable: {
+    title: "The server can't reach your database",
+    fix: (
+      <>
+        Check that <code>SUPABASE_URL</code> is exactly the Project URL (
+        <code>https://….supabase.co</code>) of the project you set up.
+      </>
+    ),
+  },
+  error: {
+    title: "The database returned an error",
+    fix: <>Check the function logs for this deployment on Vercel.</>,
+  },
+};
+
+/** Shown when the server is set up but can't actually use its database. Says what to fix. */
+function DbNotice({ db }: { db: string | null }) {
+  if (!db || db === "ok") return null;
+  const p = DB_PROBLEMS[db] ?? DB_PROBLEMS.error;
+  return (
+    <div className="flex flex-col gap-1.5 rounded-lg bg-hard/10 p-3 text-sm ring-1 ring-hard/20">
+      <div className="flex items-start gap-2 font-medium text-hard">
+        <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+        {p.title}
+      </div>
+      <p className="pl-6 text-xs text-muted-foreground [&_b]:text-foreground [&_code]:text-foreground">
+        {p.fix}
+      </p>
+    </div>
+  );
+}
+
 /** Settings tab: give this computer the sync key and your data follows you between computers. */
 export function SyncConnection() {
   const { cloud } = useApp();
@@ -63,6 +115,7 @@ export function SyncConnection() {
   if (cloud.hasKey) {
     return (
       <div className="flex flex-col gap-4">
+        <DbNotice db={cloud.db} />
         <div className="flex items-start gap-3 rounded-lg bg-muted/40 p-3 ring-1 ring-foreground/5">
           <Cloud
             className={`mt-0.5 size-4 shrink-0 ${cloud.status === "synced" ? "text-solved" : "text-muted-foreground"}`}
@@ -143,6 +196,7 @@ export function SyncConnection() {
       }}
       className="flex flex-col gap-4"
     >
+      <DbNotice db={cloud.db} />
       <p className="text-sm text-muted-foreground">
         Enter your sync key once on this computer and your data comes with it. There are no
         accounts: the key is the passphrase you set as <code>PACER_SYNC_KEY</code> on the server.
