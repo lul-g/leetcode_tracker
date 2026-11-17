@@ -7,6 +7,7 @@ export const SECTION_STORE: Record<SectionId, { key: string; event: string }> = 
   layout: { key: "lc-tracker-layout-v3", event: "lc-tracker-layout-change" },
   manual: { key: KEYS.manual, event: "pacer-store-change" },
   notes: { key: "lc-tracker-notes", event: "lc-tracker-notes-change" },
+  submissions: { key: KEYS.submissions, event: "pacer-store-change" },
   cookie: { key: KEYS.credentials, event: "pacer-store-change" },
 };
 
@@ -38,6 +39,9 @@ export function writeLocalRaw(patch: Partial<Record<SectionId, string | null>>) 
   }
   events.forEach((e) => window.dispatchEvent(new Event(e)));
 }
+
+/** the sync key this computer uses to reach the cloud copy (never synced itself) */
+export const SYNC_KEY_STORE = "pacer.syncKey";
 
 const META_KEY = "pacer.cloudmeta";
 export type StoredMeta = { uid: string | null; meta: Meta };

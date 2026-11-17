@@ -23,7 +23,7 @@ import { useSyncedData } from "@/lib/use-synced-data";
 
 const NO_MANUAL: Record<string, ManualSolve> = {};
 
-export type SettingsTab = "goal" | "leetcode" | "account";
+export type SettingsTab = "goal" | "leetcode" | "sync";
 
 type AppState = {
   settings: GoalSettings;
@@ -55,7 +55,7 @@ type AppState = {
   setManualOpen: (open: boolean) => void;
   /** what's known about LeetCode problems (title, difficulty, premium), from the last sync */
   catalogEntries: Record<string, CatalogEntry>;
-  /** cloud sync: sign-in state and the sync status */
+  /** cloud sync: whether it is set up, whether this computer has the key, and the sync status */
   cloud: CloudState;
   isDemo: boolean;
   /** false until this browser's saved data (settings, sync, layout) has been read */

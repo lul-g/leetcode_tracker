@@ -1,0 +1,65 @@
+import type { Remote } from "./engine";
+import {
+  BadKeyError,
+  NotConfiguredError,
+  type CloudBackend,
+  type SaveResult,
+} from "./types";
+
+/** Is cloud sync set up on the server? Needs no key, and says nothing else. */
+export async function fetchConfigured(): Promise<boolean> {
+  try {
+    const res = await fetch("/api/cloud?status", { cache: "no-store" });
+    const json = (await res.json()) as { configured?: boolean };
+    return !!json.configured;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Talks to this app's own /api/cloud, sending the sync key with every request. The server holds
+ * the database credentials; this browser only ever has the sync key.
+ */
+export function createHttpBackend(): CloudBackend {
+  const headers = (key: string) => ({ "content-type": "application/json", "x-sync-key": key });
+
+  async function call(init: RequestInit): Promise<Response> {
+    let res: Response;
+    try {
+      res = await fetch("/api/cloud", { cache: "no-store", ...init });
+    } catch {
+      throw new Error("Could not reach the server. Check your connection.");
+    }
+    if (res.status === 503) throw new NotConfiguredError();
+    if (res.status === 401) throw new BadKeyError();
+    return res;
+  }
+
+  return {
+    async load(key) {
+      const res = await call({ headers: headers(key) });
+      const json = (await res.json().catch(() => null)) as
+        | { ok: true; data: Remote; version: string | null }
+        | { ok: false; error: string }
+        | null;
+      if (!json || !json.ok) throw new Error(json && !json.ok ? json.error : "Bad reply.");
+      return { data: json.data ?? {}, version: json.version };
+    },
+
+    async save(key, data, version): Promise<SaveResult> {
+      const res = await call({
+        method: "PUT",
+        headers: headers(key),
+        body: JSON.stringify({ data, version }),
+      });
+      if (res.status === 409) return { ok: false, conflict: true };
+      const json = (await res.json().catch(() => null)) as
+        | { ok: true; version: string }
+        | { ok: false; error: string }
+        | null;
+      if (json && json.ok) return { ok: true, version: json.version };
+      return { ok: false, error: json && !json.ok ? json.error : "Bad reply." };
+    },
+  };
+}

@@ -1,44 +1,58 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { cloudConfigured, getBackend } from "./config";
+import { useStored, writeStore } from "@/lib/local-store";
 import { emptyMeta, noteLocalChanges, reconcile } from "./engine";
+import { createHttpBackend, fetchConfigured } from "./http-backend";
 import {
   CHANGE_EVENTS,
+  SYNC_KEY_STORE,
   readLocalRaw,
   readMeta,
   writeLocalRaw,
   writeMeta,
 } from "./sections";
-import type { AuthResult, CloudUser } from "./types";
+import { BadKeyError, NotConfiguredError } from "./types";
 
-export type CloudStatus = "off" | "signedOut" | "syncing" | "synced" | "error";
+export type CloudStatus =
+  | "checking" // asking the server whether sync is set up
+  | "unconfigured" // the server has no database / sync key
+  | "noKey" // set up, but this computer hasn't been given the key
+  | "syncing"
+  | "synced"
+  | "badKey" // the server refused this computer's key
+  | "error";
 
 export type CloudState = {
-  configured: boolean;
-  user: CloudUser | null;
+  /** has the server been set up for sync? null until we've asked */
+  serverConfigured: boolean | null;
+  hasKey: boolean;
   status: CloudStatus;
   error: string | null;
   lastSyncedAt: number | null;
-  signIn: (email: string, password: string) => Promise<AuthResult>;
-  signUp: (email: string, password: string) => Promise<AuthResult>;
-  signOut: () => Promise<void>;
+  setKey: (key: string) => void;
+  clearKey: () => void;
   syncNow: () => Promise<void>;
 };
 
 /** push a local change to the cloud this long after the last edit */
-const PUSH_DELAY = 1500;
+const PUSH_DELAY = 3000;
 /** don't re-sync on tab focus more often than this */
 const FOCUS_GAP = 60_000;
+const OWNER = "owner";
 
 /**
- * Keeps this browser's settings, card layout, manual solves, notes and cookie in step with your
- * cloud copy. Signed out (or not configured) it does nothing and the app behaves as before.
+ * Keeps this browser's settings, card layout, manual solves, notes, completed problems and
+ * cookie in step with your cloud copy, once this computer has the sync key. Without the key (or
+ * with sync not set up on the server) it does nothing and the app behaves as before.
  */
 export function useCloud(): CloudState {
-  const backend = useMemo(() => (typeof window === "undefined" ? null : getBackend()), []);
-  const [user, setUser] = useState<CloudUser | null>(null);
-  const [status, setStatus] = useState<CloudStatus>(cloudConfigured ? "signedOut" : "off");
+  const key = useStored<string | null>(SYNC_KEY_STORE, null);
+  const keyRef = useRef<string | null>(key);
+  const backend = useMemo(() => createHttpBackend(), []);
+
+  const [serverConfigured, setServerConfigured] = useState<boolean | null>(null);
+  const [status, setStatus] = useState<CloudStatus>("checking");
   const [error, setError] = useState<string | null>(null);
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
 
@@ -46,25 +60,26 @@ export function useCloud(): CloudState {
   const again = useRef(false);
   const applying = useRef(false);
   const lastRun = useRef(0);
-  const userRef = useRef<CloudUser | null>(null);
+
+  useEffect(() => {
+    keyRef.current = key;
+  }, [key]);
 
   /** One full pull, merge and push. */
   const runOnce = useCallback(async () => {
-    if (!backend) return;
+    const syncKey = keyRef.current;
+    if (!syncKey) {
+      setStatus("noKey");
+      return;
+    }
     setStatus("syncing");
     setError(null);
     try {
       for (let attempt = 0; attempt < 4; attempt++) {
-        const u = await backend.getUser();
-        if (!u) {
-          setStatus("signedOut");
-          return;
-        }
-        // a different person signing in on this browser starts from a clean slate
-        let stored = readMeta();
-        if (stored.uid !== u.id) stored = { uid: u.id, meta: emptyMeta() };
+        const { data, version } = await backend.load(syncKey);
+        // an empty database (a new project) has nothing to agree on: start over and upload it all
+        const stored = version === null ? { uid: OWNER, meta: emptyMeta() } : readMeta();
 
-        const { data, version } = await backend.load();
         const res = reconcile({
           local: readLocalRaw(),
           remote: data,
@@ -73,9 +88,9 @@ export function useCloud(): CloudState {
         });
 
         if (Object.keys(res.pushRemote).length) {
-          const saved = await backend.save({ ...data, ...res.pushRemote }, version);
+          const saved = await backend.save(syncKey, { ...data, ...res.pushRemote }, version);
           if (!saved.ok) {
-            if (saved.conflict) continue; // another device wrote meanwhile: read again and retry
+            if (saved.conflict) continue; // another computer wrote meanwhile: read again and retry
             throw new Error(saved.error);
           }
         }
@@ -86,22 +101,29 @@ export function useCloud(): CloudState {
         } finally {
           applying.current = false;
         }
-        writeMeta({ uid: u.id, meta: res.meta });
+        writeMeta({ uid: OWNER, meta: res.meta });
         lastRun.current = Date.now();
         setLastSyncedAt(lastRun.current);
         setStatus("synced");
         return;
       }
-      throw new Error("Another device kept changing things. Try again in a moment.");
+      throw new Error("Another computer kept changing things. Try again in a moment.");
     } catch (e) {
-      setStatus("error");
-      setError(e instanceof Error ? e.message : String(e));
+      if (e instanceof NotConfiguredError) {
+        setServerConfigured(false);
+        setStatus("unconfigured");
+      } else if (e instanceof BadKeyError) {
+        setStatus("badKey");
+        setError(e.message);
+      } else {
+        setStatus("error");
+        setError(e instanceof Error ? e.message : String(e));
+      }
     }
   }, [backend]);
 
   /** Sync now; if something asks for another sync while one is running, run it right after. */
   const syncNow = useCallback(async () => {
-    if (!backend) return;
     if (running.current) {
       again.current = true;
       return;
@@ -115,30 +137,37 @@ export function useCloud(): CloudState {
     } finally {
       running.current = false;
     }
-  }, [backend, runOnce]);
+  }, [runOnce]);
 
-  // who is signed in; sync as soon as someone is
+  // is the server set up for sync at all?
   useEffect(() => {
-    if (!backend) return;
     let alive = true;
-    const apply = (u: CloudUser | null) => {
+    void fetchConfigured().then((ok) => {
       if (!alive) return;
-      userRef.current = u;
-      setUser(u);
-      if (u) void syncNow();
-      else setStatus("signedOut");
-    };
-    void backend.getUser().then(apply);
-    const off = backend.onAuthChange(apply);
+      setServerConfigured(ok);
+      if (!ok) setStatus("unconfigured");
+    });
     return () => {
       alive = false;
-      off();
     };
-  }, [backend, syncNow]);
+  }, []);
+
+  // sync as soon as this computer has the key and the server is ready
+  const ready = serverConfigured === true;
+  const hasKey = !!key;
+  useEffect(() => {
+    if (!ready) return;
+    if (!hasKey) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setStatus("noKey");
+      return;
+    }
+    void syncNow();
+  }, [ready, hasKey, key, syncNow]);
 
   // push edits shortly after they happen, and note when they happened
   useEffect(() => {
-    if (!backend || !user) return;
+    if (!ready || !hasKey) return;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const onChange = () => {
       if (applying.current) return;
@@ -157,11 +186,11 @@ export function useCloud(): CloudState {
       CHANGE_EVENTS.forEach((e) => window.removeEventListener(e, onChange));
       window.removeEventListener("storage", onChange);
     };
-  }, [backend, user, syncNow]);
+  }, [ready, hasKey, syncNow]);
 
   // pick up changes made on another computer when you come back to this tab
   useEffect(() => {
-    if (!backend || !user) return;
+    if (!ready || !hasKey) return;
     const onFocus = () => {
       if (document.visibilityState !== "visible") return;
       if (Date.now() - lastRun.current < FOCUS_GAP) return;
@@ -173,33 +202,30 @@ export function useCloud(): CloudState {
       document.removeEventListener("visibilitychange", onFocus);
       window.removeEventListener("focus", onFocus);
     };
-  }, [backend, user, syncNow]);
+  }, [ready, hasKey, syncNow]);
 
-  const signIn = useCallback(
-    async (email: string, password: string): Promise<AuthResult> =>
-      backend ? backend.signIn(email.trim(), password) : { error: "Cloud sync isn't set up." },
-    [backend],
-  );
-  const signUp = useCallback(
-    async (email: string, password: string): Promise<AuthResult> =>
-      backend ? backend.signUp(email.trim(), password) : { error: "Cloud sync isn't set up." },
-    [backend],
-  );
-  const signOut = useCallback(async () => {
-    await backend?.signOut();
-    writeMeta(null); // forget what we'd agreed on; the data on this browser stays
+  const setKey = useCallback((k: string) => {
+    const trimmed = k.trim();
+    if (!trimmed) return;
+    writeMeta(null); // a new key means a fresh start with whatever it unlocks
+    writeStore(SYNC_KEY_STORE, trimmed);
+  }, []);
+  const clearKey = useCallback(() => {
+    writeStore(SYNC_KEY_STORE, null);
+    writeMeta(null); // forget what we'd agreed on; the data on this computer stays
     setLastSyncedAt(null);
-  }, [backend]);
+    setError(null);
+  }, []);
 
   return {
-    configured: cloudConfigured,
-    user,
+    serverConfigured,
+    hasKey,
     status,
     error,
     lastSyncedAt,
-    signIn,
-    signUp,
-    signOut,
+    setKey,
+    clearKey,
     syncNow,
   };
 }
+

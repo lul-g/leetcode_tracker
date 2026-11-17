@@ -2,18 +2,26 @@
  * The merge rules for cloud sync, as pure functions so they can be tested without a browser
  * or a database. Nothing in here touches storage or the network.
  *
- * Data is split into a few "sections" (settings, layout, manual solves, notes, cookie). Each
+ * Data is split into a few "sections" (settings, layout, manual solves, notes, your completed
+ * problems' submissions, cookie). Each
  * section is stored as a raw JSON string and carries the time it last changed. A device keeps a
  * `Meta` of what it last agreed on with the cloud, which is how it tells "I changed this" from
  * "the cloud changed this".
  */
 
-export type SectionId = "settings" | "layout" | "manual" | "notes" | "cookie";
+export type SectionId = "settings" | "layout" | "manual" | "notes" | "submissions" | "cookie";
 
-export const SECTION_IDS: SectionId[] = ["settings", "layout", "manual", "notes", "cookie"];
+export const SECTION_IDS: SectionId[] = [
+  "settings",
+  "layout",
+  "manual",
+  "notes",
+  "submissions",
+  "cookie",
+];
 
 /** Maps where two devices adding different entries should keep both. */
-const MERGEABLE = new Set<SectionId>(["manual", "notes"]);
+const MERGEABLE = new Set<SectionId>(["manual", "notes", "submissions"]);
 
 export type RemoteSection = { v: string | null; at: number };
 export type Remote = Partial<Record<SectionId, RemoteSection>>;
@@ -57,6 +65,22 @@ export function mergeMaps(local: string | null, remote: string | null, preferLoc
   const r = parseMap(remote);
   const merged = preferLocal ? { ...r, ...l } : { ...l, ...r };
   return Object.keys(merged).length ? JSON.stringify(merged) : null;
+}
+
+/**
+ * Submissions, keyed by problem slug: for each problem keep every submission either side knows
+ * about (matched by submission id), oldest first. Nothing downloaded is ever dropped.
+ */
+export function mergeSubmissions(local: string | null, remote: string | null) {
+  const l = parseMap(local) as Record<string, { id: string; t: number }[]>;
+  const r = parseMap(remote) as Record<string, { id: string; t: number }[]>;
+  const out: Record<string, { id: string; t: number }[]> = {};
+  for (const slug of new Set([...Object.keys(l), ...Object.keys(r)])) {
+    const byId = new Map<string, { id: string; t: number }>();
+    for (const sub of [...(r[slug] ?? []), ...(l[slug] ?? [])]) byId.set(sub.id, sub);
+    out[slug] = [...byId.values()].sort((a, b) => a.t - b.t);
+  }
+  return Object.keys(out).length ? JSON.stringify(out) : null;
 }
 
 export type Result = {
@@ -120,7 +144,10 @@ export function reconcile(input: {
       // both sides changed
       const neverSynced = meta.at[s] === undefined;
       if (MERGEABLE.has(s)) {
-        const merged = mergeMaps(l, r!.v, editedAt >= remoteAt);
+        const merged =
+          s === "submissions"
+            ? mergeSubmissions(l, r!.v)
+            : mergeMaps(l, r!.v, editedAt >= remoteAt);
         const at = Math.max(now, remoteAt + 1);
         if (merged !== l) out.writeLocal[s] = merged;
         send(merged, at);

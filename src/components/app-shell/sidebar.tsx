@@ -75,11 +75,11 @@ export function Sidebar() {
       : connection.lastSyncedAt
         ? `Synced ${timeAgo(connection.lastSyncedAt)}`
         : "Not synced yet";
-  const cloudLabel = !cloud.user
-    ? "Sign in to sync devices"
+  const cloudLabel = !cloud.hasKey
+    ? "Add sync key"
     : cloud.status === "syncing"
       ? "Syncing devices…"
-      : cloud.status === "error"
+      : cloud.status === "error" || cloud.status === "badKey"
         ? "Cloud sync failed"
         : cloud.lastSyncedAt
           ? `Cloud synced ${timeAgo(cloud.lastSyncedAt)}`
@@ -209,20 +209,22 @@ export function Sidebar() {
       <div className="flex flex-col gap-0.5 border-t p-3">
         {!collapsed && hydrated && <SidebarConnect />}
         {hydrated &&
-          cloud.configured &&
+          cloud.serverConfigured === true &&
           withTip(
             cloudLabel,
             <button
               type="button"
-              onClick={() => openSettings("account")}
+              onClick={() => openSettings("sync")}
               aria-label={collapsed ? cloudLabel : undefined}
               className={cn(itemClass, "w-full", collapsed && "justify-center px-0")}
             >
-              {cloud.user ? (
+              {cloud.hasKey ? (
                 <Cloud
                   className={cn(
                     "size-5 shrink-0",
-                    cloud.status === "error" ? "text-hard" : "text-solved",
+                    cloud.status === "error" || cloud.status === "badKey"
+                      ? "text-hard"
+                      : "text-solved",
                   )}
                   strokeWidth={1.8}
                 />
