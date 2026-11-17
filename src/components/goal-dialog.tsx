@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { DatePicker } from "@/components/date-picker";
+import { AccountConnection } from "@/components/account-connection";
 import { LeetCodeConnection } from "@/components/leetcode-connection";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { SettingsTab } from "@/lib/app-context";
@@ -43,12 +44,13 @@ export function SettingsDialog({
       <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Settings</DialogTitle>
-          <DialogDescription>Your goal and your LeetCode connection.</DialogDescription>
+          <DialogDescription>Your goal, your LeetCode connection and your account.</DialogDescription>
         </DialogHeader>
         <Tabs value={tab} onValueChange={(v) => onTabChange(v as SettingsTab)}>
           <TabsList className="w-full">
             <TabsTrigger value="goal">Goal</TabsTrigger>
             <TabsTrigger value="leetcode">LeetCode</TabsTrigger>
+            <TabsTrigger value="account">Account</TabsTrigger>
           </TabsList>
         </Tabs>
         {tab === "goal" ? (
@@ -62,8 +64,10 @@ export function SettingsDialog({
               }}
             />
           )
-        ) : (
+        ) : tab === "leetcode" ? (
           <LeetCodeConnection />
+        ) : (
+          <AccountConnection />
         )}
       </DialogContent>
     </Dialog>

@@ -3,7 +3,7 @@
 import { useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { PanelLeft, Plus, RefreshCw, Settings } from "lucide-react";
+import { Cloud, CloudOff, PanelLeft, Plus, RefreshCw, Settings } from "lucide-react";
 import { LogoMark, APP_NAME } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -55,6 +55,7 @@ export function Sidebar() {
     setListId,
     openSettings,
     setManualOpen,
+    cloud,
     settings,
     hydrated,
     isDemo,
@@ -74,6 +75,15 @@ export function Sidebar() {
       : connection.lastSyncedAt
         ? `Synced ${timeAgo(connection.lastSyncedAt)}`
         : "Not synced yet";
+  const cloudLabel = !cloud.user
+    ? "Sign in to sync devices"
+    : cloud.status === "syncing"
+      ? "Syncing devices…"
+      : cloud.status === "error"
+        ? "Cloud sync failed"
+        : cloud.lastSyncedAt
+          ? `Cloud synced ${timeAgo(cloud.lastSyncedAt)}`
+          : "Cloud connected";
   const onSync = () => (connection.connected ? sync("incremental") : openSettings("leetcode"));
 
   const withTip = (label: string, node: React.ReactElement) =>
@@ -198,6 +208,30 @@ export function Sidebar() {
 
       <div className="flex flex-col gap-0.5 border-t p-3">
         {!collapsed && hydrated && <SidebarConnect />}
+        {hydrated &&
+          cloud.configured &&
+          withTip(
+            cloudLabel,
+            <button
+              type="button"
+              onClick={() => openSettings("account")}
+              aria-label={collapsed ? cloudLabel : undefined}
+              className={cn(itemClass, "w-full", collapsed && "justify-center px-0")}
+            >
+              {cloud.user ? (
+                <Cloud
+                  className={cn(
+                    "size-5 shrink-0",
+                    cloud.status === "error" ? "text-hard" : "text-solved",
+                  )}
+                  strokeWidth={1.8}
+                />
+              ) : (
+                <CloudOff className="size-5 shrink-0" strokeWidth={1.8} />
+              )}
+              {!collapsed && <span className="truncate text-sm">{cloudLabel}</span>}
+            </button>,
+          )}
         {hydrated && withTip(
           syncLabel,
           <button

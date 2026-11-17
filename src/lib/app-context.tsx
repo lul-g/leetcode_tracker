@@ -15,6 +15,7 @@ import {
 } from "@/lib/data";
 import type { GoalSettings, Solve } from "@/lib/pace";
 import { PROBLEMS, buildProblems, type Problem } from "@/lib/problems";
+import { useCloud, type CloudState } from "@/lib/cloud/use-cloud";
 import { KEYS, useStored, writeStore } from "@/lib/local-store";
 import type { CatalogEntry, ManualSolve, SyncStatus, SyncSummary } from "@/lib/sync-types";
 import { useSettings } from "@/lib/use-settings";
@@ -22,7 +23,7 @@ import { useSyncedData } from "@/lib/use-synced-data";
 
 const NO_MANUAL: Record<string, ManualSolve> = {};
 
-export type SettingsTab = "goal" | "leetcode";
+export type SettingsTab = "goal" | "leetcode" | "account";
 
 type AppState = {
   settings: GoalSettings;
@@ -54,6 +55,8 @@ type AppState = {
   setManualOpen: (open: boolean) => void;
   /** what's known about LeetCode problems (title, difficulty, premium), from the last sync */
   catalogEntries: Record<string, CatalogEntry>;
+  /** cloud sync: sign-in state and the sync status */
+  cloud: CloudState;
   isDemo: boolean;
   /** false until this browser's saved data (settings, sync, layout) has been read */
   hydrated: boolean;
@@ -83,6 +86,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("goal");
   const synced = useSyncedData();
+  const cloud = useCloud();
   const manualMap = useStored<Record<string, ManualSolve>>(KEYS.manual, NO_MANUAL);
   const manual = useMemo(() => Object.values(manualMap), [manualMap]);
   const [manualOpen, setManualOpen] = useState(false);
@@ -149,6 +153,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     manualOpen,
     setManualOpen,
     catalogEntries: synced.catalogEntries,
+    cloud,
     isDemo,
     hydrated,
     dataLoaded: hydrated,
