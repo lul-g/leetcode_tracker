@@ -13,23 +13,34 @@ const ROW_ID = "me";
 /** Vercel rejects request bodies over 4.5 MB, so stay safely under it. */
 export const MAX_BYTES = 4_000_000;
 
+// Trimmed, because a stray space or newline pasted into a settings page is easy to miss.
+const clean = (v: string | undefined) => v?.trim() || undefined;
 const env = () => ({
-  url: process.env.SUPABASE_URL,
-  key: process.env.SUPABASE_SERVICE_ROLE_KEY,
-  syncKey: process.env.PACER_SYNC_KEY,
+  url: clean(process.env.SUPABASE_URL),
+  key: clean(process.env.SUPABASE_SERVICE_ROLE_KEY),
+  syncKey: clean(process.env.PACER_SYNC_KEY),
 });
+
+/** Names (never values) of the settings this server is missing. */
+export function missingConfig(): string[] {
+  const e = env();
+  const missing: string[] = [];
+  if (!e.url) missing.push("SUPABASE_URL");
+  if (!e.key) missing.push("SUPABASE_SERVICE_ROLE_KEY");
+  if (!e.syncKey) missing.push("PACER_SYNC_KEY");
+  return missing;
+}
 
 /** Are all three settings present on the server? */
 export function cloudConfigured(): boolean {
-  const e = env();
-  return Boolean(e.url && e.key && e.syncKey);
+  return missingConfig().length === 0;
 }
 
 /** Does the key the browser sent match PACER_SYNC_KEY? Compared in constant time. */
 export function syncKeyMatches(sent: string | null): boolean {
   const expected = env().syncKey;
   if (!expected || !sent) return false;
-  const a = createHash("sha256").update(sent).digest();
+  const a = createHash("sha256").update(sent.trim()).digest();
   const b = createHash("sha256").update(expected).digest();
   return timingSafeEqual(a, b);
 }

@@ -6,14 +6,14 @@ import {
   type SaveResult,
 } from "./types";
 
-/** Is cloud sync set up on the server? Needs no key, and says nothing else. */
-export async function fetchConfigured(): Promise<boolean> {
+/** Is cloud sync set up on the server, and if not, which settings are missing (names only)? Needs no key. */
+export async function fetchStatus(): Promise<{ configured: boolean; missing: string[] }> {
   try {
     const res = await fetch("/api/cloud?status", { cache: "no-store" });
-    const json = (await res.json()) as { configured?: boolean };
-    return !!json.configured;
+    const json = (await res.json()) as { configured?: boolean; missing?: string[] };
+    return { configured: !!json.configured, missing: json.missing ?? [] };
   } catch {
-    return false;
+    return { configured: false, missing: [] };
   }
 }
 

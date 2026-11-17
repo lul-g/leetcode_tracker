@@ -20,11 +20,34 @@ export function SyncConnection() {
           <CloudOff className="size-4 text-muted-foreground" />
           Cloud sync isn&apos;t set up on the server
         </div>
-        <p className="text-muted-foreground">
-          Right now everything is saved in this browser only, so a second computer starts empty. To
-          sync between computers, connect a free Supabase project and set a sync key. The steps are
-          in <code className="text-foreground">docs/cloud-sync.md</code>.
-        </p>
+        {cloud.missing.length > 0 ? (
+          <div className="space-y-2">
+            <p className="text-muted-foreground">
+              This server can&apos;t see these settings yet:
+            </p>
+            <ul className="space-y-1">
+              {cloud.missing.map((name) => (
+                <li key={name}>
+                  <code className="rounded bg-background/60 px-1.5 py-0.5 text-xs text-foreground">
+                    {name}
+                  </code>
+                </li>
+              ))}
+            </ul>
+            <p className="text-xs text-muted-foreground">
+              On Vercel, add them under Settings, Environment Variables (for the environment this
+              site is deployed to), then <span className="text-foreground">redeploy</span>: a
+              change only reaches new deployments. Running locally, they go in{" "}
+              <code className="text-foreground">.env.local</code>, then restart{" "}
+              <code className="text-foreground">npm run dev</code>.
+            </p>
+          </div>
+        ) : (
+          <p className="text-muted-foreground">
+            Right now everything is saved in this browser only, so a second computer starts empty.
+            The steps to sync are in <code className="text-foreground">docs/cloud-sync.md</code>.
+          </p>
+        )}
       </div>
     );
   }

@@ -3,6 +3,7 @@ import {
   MAX_BYTES,
   cloudConfigured,
   loadRow,
+  missingConfig,
   parseSections,
   saveRow,
   syncKeyMatches,
@@ -12,14 +13,18 @@ import {
  * The only door to your cloud copy. Every request must carry the sync key (PACER_SYNC_KEY);
  * without it the server hands over nothing. No accounts, no logins, just that one secret.
  */
-const NOT_CONFIGURED = {
-  ok: false,
-  configured: false,
-  error: "Cloud sync isn't set up on the server yet.",
-};
-
 function guard(req: Request): Response | null {
-  if (!cloudConfigured()) return Response.json(NOT_CONFIGURED, { status: 503 });
+  if (!cloudConfigured()) {
+    return Response.json(
+      {
+        ok: false,
+        configured: false,
+        missing: missingConfig(),
+        error: "Cloud sync isn't set up on the server yet.",
+      },
+      { status: 503 },
+    );
+  }
   if (!syncKeyMatches(req.headers.get("x-sync-key"))) {
     return Response.json(
       { ok: false, configured: true, error: "That sync key isn't right." },
@@ -33,7 +38,7 @@ function guard(req: Request): Response | null {
 export async function GET(req: Request) {
   await connection();
   if (new URL(req.url).searchParams.has("status")) {
-    return Response.json({ ok: true, configured: cloudConfigured() });
+    return Response.json({ ok: true, configured: cloudConfigured(), missing: missingConfig() });
   }
   const denied = guard(req);
   if (denied) return denied;
