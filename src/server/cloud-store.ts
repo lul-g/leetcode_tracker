@@ -2,6 +2,7 @@ import "server-only";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { SECTION_IDS, type Remote } from "@/lib/cloud/engine";
+import { normalizeKey } from "@/lib/cloud/key";
 
 /**
  * The cloud copy of your data: one row in Supabase, reached only from this server with the
@@ -36,13 +37,24 @@ export function cloudConfigured(): boolean {
   return missingConfig().length === 0;
 }
 
-/** Does the key the browser sent match PACER_SYNC_KEY? Compared in constant time. */
+const sha = (s: string) => createHash("sha256").update(s, "utf8");
+
+/**
+ * Does what the browser sent match PACER_SYNC_KEY? The browser sends a SHA-256 fingerprint of the
+ * normalised key (or the normalised key itself on pages that can't hash); both are accepted.
+ * Compared in constant time.
+ */
 export function syncKeyMatches(sent: string | null): boolean {
-  const expected = env().syncKey;
-  if (!expected || !sent) return false;
-  const a = createHash("sha256").update(sent.trim()).digest();
-  const b = createHash("sha256").update(expected).digest();
-  return timingSafeEqual(a, b);
+  const configured = env().syncKey;
+  if (!configured || !sent) return false;
+  const expected = normalizeKey(configured);
+  const got = sha(sent.trim()).digest();
+  const asToken = sha(sha(expected).digest("hex")).digest();
+  const asPlain = sha(expected).digest();
+  // evaluate both so timing doesn't reveal which form was sent
+  const a = timingSafeEqual(got, asToken);
+  const b = timingSafeEqual(got, asPlain);
+  return a || b;
 }
 
 let client: SupabaseClient | null = null;

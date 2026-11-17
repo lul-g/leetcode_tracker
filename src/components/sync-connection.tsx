@@ -90,6 +90,20 @@ export function SyncConnection() {
             </span>
           </div>
         )}
+        {cloud.status === "badKey" && (
+          <ul className="list-disc space-y-1 pl-5 text-xs text-muted-foreground">
+            <li>
+              The key must match <code className="text-foreground">PACER_SYNC_KEY</code> on{" "}
+              <span className="text-foreground">this</span> server. Your hosted site and your own
+              computer are separate servers, each with its own value.
+            </li>
+            <li>After changing it, redeploy (Vercel) or restart <code>npm run dev</code>.</li>
+            <li>
+              In <code>.env.local</code> a <code>#</code> starts a comment, so wrap a key that
+              contains one in quotes.
+            </li>
+          </ul>
+        )}
 
         <p className="text-xs text-muted-foreground">
           Your goal and dates, card layout, notes, solves you logged by hand, your completed

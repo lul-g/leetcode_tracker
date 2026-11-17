@@ -101,6 +101,17 @@ export function useSyncedData() {
   // Pull new solves by itself: when the app opens and whenever you come back to the tab,
   // if the last sync is more than a few minutes old. It never retries an expired cookie.
   const connected = !!creds;
+  const session = creds?.session;
+
+  // A different cookie showed up, pasted here or synced down from another computer. The old one
+  // is no longer the problem, so forget the "expired" block and let the next check try again.
+  useEffect(() => {
+    needsNewCookie.current = false;
+    lastAttempt.current = 0;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setStatus((s) => (s.authError ? { ...IDLE } : s));
+  }, [session]);
+
   useEffect(() => {
     if (!ready || !connected) return;
     const maybeSync = () => {
@@ -119,7 +130,7 @@ export function useSyncedData() {
       document.removeEventListener("visibilitychange", maybeSync);
       window.removeEventListener("focus", maybeSync);
     };
-  }, [ready, connected, sync]);
+  }, [ready, connected, session, sync]);
 
   /** Save a cookie after LeetCode confirms it. Resolves to an error message, or null on success. */
   const connect = useCallback(

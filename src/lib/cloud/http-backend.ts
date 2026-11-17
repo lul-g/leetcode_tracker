@@ -1,4 +1,5 @@
 import type { Remote } from "./engine";
+import { keyToken } from "./key";
 import {
   BadKeyError,
   NotConfiguredError,
@@ -22,7 +23,10 @@ export async function fetchStatus(): Promise<{ configured: boolean; missing: str
  * the database credentials; this browser only ever has the sync key.
  */
 export function createHttpBackend(): CloudBackend {
-  const headers = (key: string) => ({ "content-type": "application/json", "x-sync-key": key });
+  const headers = async (key: string) => ({
+    "content-type": "application/json",
+    "x-sync-key": await keyToken(key),
+  });
 
   async function call(init: RequestInit): Promise<Response> {
     let res: Response;
@@ -38,7 +42,7 @@ export function createHttpBackend(): CloudBackend {
 
   return {
     async load(key) {
-      const res = await call({ headers: headers(key) });
+      const res = await call({ headers: await headers(key) });
       const json = (await res.json().catch(() => null)) as
         | { ok: true; data: Remote; version: string | null }
         | { ok: false; error: string }
@@ -50,7 +54,7 @@ export function createHttpBackend(): CloudBackend {
     async save(key, data, version): Promise<SaveResult> {
       const res = await call({
         method: "PUT",
-        headers: headers(key),
+        headers: await headers(key),
         body: JSON.stringify({ data, version }),
       });
       if (res.status === 409) return { ok: false, conflict: true };
