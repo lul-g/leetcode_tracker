@@ -8,7 +8,14 @@ import {
 } from "./types";
 
 /** Is cloud sync set up on the server, and if not, which settings are missing (names only)? Needs no key. */
-export type DbHealth = "ok" | "missing_table" | "bad_secret" | "unreachable" | "error";
+export type DbHealth =
+  | "ok"
+  | "missing_table"
+  | "wrong_role"
+  | "no_grants"
+  | "bad_secret"
+  | "unreachable"
+  | "error";
 
 export async function fetchStatus(): Promise<{
   configured: boolean;

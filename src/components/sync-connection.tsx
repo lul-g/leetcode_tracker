@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { useApp } from "@/lib/app-context";
 import { timeAgo } from "@/lib/time-ago";
 
+const GRANT_SQL = "grant select, insert, update on table public.pacer_data to service_role;";
+
 const DB_PROBLEMS: Record<string, { title: string; fix: React.ReactNode }> = {
   missing_table: {
     title: "The database table isn't there yet",
@@ -18,13 +20,37 @@ const DB_PROBLEMS: Record<string, { title: string; fix: React.ReactNode }> = {
       </>
     ),
   },
-  bad_secret: {
-    title: "Supabase refused the secret key",
+  wrong_role: {
+    title: "That's the wrong kind of key",
     fix: (
       <>
-        <code>SUPABASE_SERVICE_ROLE_KEY</code> must be the project&apos;s <b>secret</b> (or
-        service_role) key, not the publishable/anon one, and from the same project as{" "}
-        <code>SUPABASE_URL</code>.
+        Supabase accepts it, but it&apos;s the <b>publishable / anon</b> key, which can&apos;t
+        touch this table. Set <code>SUPABASE_SERVICE_ROLE_KEY</code> to the <b>Secret</b> key (
+        <code>sb_secret_…</code>) or the legacy <code>service_role</code> key.
+      </>
+    ),
+  },
+  no_grants: {
+    title: "The table hasn't given the server access yet",
+    fix: (
+      <>
+        Your key is fine. Supabase just doesn&apos;t give new tables to the server&apos;s role
+        automatically when &quot;Automatically expose new tables&quot; is off. In the Supabase{" "}
+        <b>SQL Editor</b>, run:
+        <code className="mt-1.5 block rounded bg-background/60 p-2 text-[11px] break-all whitespace-pre-wrap">
+          {GRANT_SQL}
+        </code>
+        Then press Sync now.
+      </>
+    ),
+  },
+  bad_secret: {
+    title: "Supabase doesn't recognise the secret key",
+    fix: (
+      <>
+        Copy the <b>Secret</b> key again from <b>Project Settings, API Keys</b>, from the same
+        project as <code>SUPABASE_URL</code>, and paste it into{" "}
+        <code>SUPABASE_SERVICE_ROLE_KEY</code> with no spaces or extra characters. Then redeploy.
       </>
     ),
   },

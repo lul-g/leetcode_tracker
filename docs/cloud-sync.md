@@ -59,5 +59,8 @@ words is fine) and don't share it.
 - **"Cloud sync isn't set up on the server"**: one of the three variables is missing, or Vercel
   hasn't been redeployed since you added them.
 - **"That sync key isn't right"**: the key typed in the app must match `PACER_SYNC_KEY` exactly.
-- **Database errors**: check that the SQL in step 2 ran, and that `SUPABASE_URL` and the secret key
-  are from the same project.
+- **"permission denied for table pacer_data"**: the SQL grant is missing (it is part of the current
+  `supabase/schema.sql`). Run `grant select, insert, update on table public.pacer_data to
+  service_role;` in the SQL Editor. This happens when "Automatically expose new tables" is off.
+- **Other database errors**: check that the SQL in step 2 ran, and that `SUPABASE_URL` and the
+  secret key are from the same project.

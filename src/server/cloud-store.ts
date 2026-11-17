@@ -14,8 +14,9 @@ const ROW_ID = "me";
 /** Vercel rejects request bodies over 4.5 MB, so stay safely under it. */
 export const MAX_BYTES = 4_000_000;
 
-// Trimmed, because a stray space or newline pasted into a settings page is easy to miss.
-const clean = (v: string | undefined) => v?.trim() || undefined;
+// Trimmed and unquoted, because a stray space, newline or pair of quotes pasted into a settings
+// page is easy to miss (Vercel keeps quotes as part of the value).
+const clean = (v: string | undefined) => (v ? normalizeKey(v) : "") || undefined;
 const env = () => ({
   url: clean(process.env.SUPABASE_URL),
   key: clean(process.env.SUPABASE_SERVICE_ROLE_KEY),
@@ -81,7 +82,30 @@ export function parseSections(input: unknown): Remote | null {
 }
 
 /** How the database check went, in plain categories (never raw errors, which could name your project). */
-export type DbHealth = "ok" | "missing_table" | "bad_secret" | "unreachable" | "error";
+export type DbHealth =
+  | "ok"
+  | "missing_table"
+  | "wrong_role" // the key is the publishable/anon one: it may not touch this table
+  | "no_grants" // the key is the secret one, but the table never granted it access
+  | "bad_secret" // Supabase does not recognise the key at all
+  | "unreachable"
+  | "error";
+
+/** What kind of Supabase key is configured, judged from its own shape (nothing is revealed). */
+function keyKind(key: string | undefined): "publishable" | "secret" | "unknown" {
+  if (!key) return "unknown";
+  if (key.startsWith("sb_publishable_")) return "publishable";
+  if (key.startsWith("sb_secret_")) return "secret";
+  const parts = key.split(".");
+  if (parts.length === 3) {
+    try {
+      const role = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8")).role;
+      if (role === "anon") return "publishable";
+      if (role === "service_role") return "secret";
+    } catch {}
+  }
+  return "unknown";
+}
 
 let healthCache: { at: number; v: DbHealth } | null = null;
 
@@ -95,8 +119,10 @@ export async function dbHealth(): Promise<DbHealth> {
     if (!error) v = "ok";
     else if (error.code === "42P01" || error.code === "PGRST205" || /does not exist|schema cache|could not find the table/i.test(msg))
       v = "missing_table";
-    else if (/invalid api key|jwt|apikey|unauthori[sz]ed|permission denied|not allowed/i.test(msg))
-      v = "bad_secret";
+    else if (error.code === "42501" || /permission denied|row-level security|not allowed/i.test(msg))
+      // a publishable key is simply the wrong key; anything else was refused for lack of a grant
+      v = keyKind(env().key) === "publishable" ? "wrong_role" : "no_grants";
+    else if (/invalid api key|jwt|apikey|unauthori[sz]ed|no api key/i.test(msg)) v = "bad_secret";
     else if (/fetch failed|enotfound|econnrefused|network|timed? ?out|getaddrinfo|invalid url/i.test(msg))
       v = "unreachable";
     else v = "error";

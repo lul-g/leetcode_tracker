@@ -15,3 +15,8 @@ create table if not exists public.pacer_data (
 -- Only Pacer's own server, using the project's secret (service-role) key, can read or write it.
 alter table public.pacer_data enable row level security;
 revoke all on table public.pacer_data from anon, authenticated;
+
+-- Pacer's server uses the secret key, which runs as the service_role. It bypasses row-level
+-- security but still needs the table privilege, and Supabase only hands that out automatically
+-- when "Automatically expose new tables" is on. Grant it explicitly so it works either way.
+grant select, insert, update on table public.pacer_data to service_role;
