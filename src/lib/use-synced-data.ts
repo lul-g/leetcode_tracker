@@ -14,6 +14,7 @@ import {
 import { buildRecords } from "@/lib/records";
 import { runSync } from "@/lib/sync-client";
 import type {
+  CatalogEntry,
   Credentials,
   ListTotals,
   ProblemRecord,
@@ -48,6 +49,7 @@ export function parseCookies(input: string) {
 }
 
 const NO_SUBS: Record<string, Sub[]> = {};
+const NO_ENTRIES: Record<string, CatalogEntry> = {};
 
 /** an automatic sync runs when the last one is older than this */
 const AUTO_STALE_AFTER = 10 * 60 * 1000;
@@ -155,6 +157,7 @@ export function useSyncedData() {
     hasData: meta.lastSyncedAt !== null,
     summary: meta.summary ?? null,
     records,
+    catalogEntries: catalog?.entries ?? NO_ENTRIES,
     listTotals,
     status,
     sync,

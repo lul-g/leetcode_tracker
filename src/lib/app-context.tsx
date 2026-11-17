@@ -15,9 +15,12 @@ import {
 } from "@/lib/data";
 import type { GoalSettings, Solve } from "@/lib/pace";
 import { PROBLEMS, buildProblems, type Problem } from "@/lib/problems";
-import type { SyncStatus, SyncSummary } from "@/lib/sync-types";
+import { KEYS, useStored, writeStore } from "@/lib/local-store";
+import type { CatalogEntry, ManualSolve, SyncStatus, SyncSummary } from "@/lib/sync-types";
 import { useSettings } from "@/lib/use-settings";
 import { useSyncedData } from "@/lib/use-synced-data";
+
+const NO_MANUAL: Record<string, ManualSolve> = {};
 
 export type SettingsTab = "goal" | "leetcode";
 
@@ -43,6 +46,14 @@ type AppState = {
   /** open the settings dialog on a tab */
   openSettings: (tab?: SettingsTab) => void;
   /** true until a first sync has brought in real data */
+  /** problems you logged by hand (e.g. premium ones solved on NeetCode) */
+  manual: ManualSolve[];
+  addManual: (m: ManualSolve) => void;
+  removeManual: (slug: string) => void;
+  manualOpen: boolean;
+  setManualOpen: (open: boolean) => void;
+  /** what's known about LeetCode problems (title, difficulty, premium), from the last sync */
+  catalogEntries: Record<string, CatalogEntry>;
   isDemo: boolean;
   /** false until this browser's saved data (settings, sync, layout) has been read */
   hydrated: boolean;
@@ -72,9 +83,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>("goal");
   const synced = useSyncedData();
+  const manualMap = useStored<Record<string, ManualSolve>>(KEYS.manual, NO_MANUAL);
+  const manual = useMemo(() => Object.values(manualMap), [manualMap]);
+  const [manualOpen, setManualOpen] = useState(false);
+  const addManual = (m: ManualSolve) => writeStore(KEYS.manual, { ...manualMap, [m.slug]: m });
+  const removeManual = (slug: string) => {
+    const next = { ...manualMap };
+    delete next[slug];
+    writeStore(KEYS.manual, Object.keys(next).length ? next : null);
+  };
   const hydrated = synced.ready;
   // Until saved data is readable, claim nothing: no demo numbers that then flip to yours.
-  const isDemo = hydrated && !synced.hasData;
+  // logging a solve by hand means you are using the real thing, so drop the demo data
+  const isDemo = hydrated && !synced.hasData && manual.length === 0;
 
   // Only solves on/after the start date count toward the goal. Real data once a sync has
   // happened, otherwise the built-in demo so the app isn't empty.
@@ -84,8 +105,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ? []
         : isDemo
           ? PROBLEMS.filter((p) => p.solvedAt >= settings.startDate)
-          : buildProblems(synced.records, settings.startDate),
-    [hydrated, isDemo, synced.records, settings.startDate],
+          : buildProblems(synced.records, settings.startDate, manual),
+    [hydrated, isDemo, synced.records, settings.startDate, manual],
   );
   const solves = useMemo<Solve[]>(
     () => problems.map((p) => ({ date: p.solvedAt, difficulty: p.difficulty, topic: p.topic })),
@@ -122,6 +143,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (tab) setSettingsTab(tab);
       setSettingsOpen(true);
     },
+    manual,
+    addManual,
+    removeManual,
+    manualOpen,
+    setManualOpen,
+    catalogEntries: synced.catalogEntries,
     isDemo,
     hydrated,
     dataLoaded: hydrated,

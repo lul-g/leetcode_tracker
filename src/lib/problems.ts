@@ -1,6 +1,6 @@
 import type { Difficulty } from "@/lib/data";
 import { listsOf, topicOf } from "@/lib/lists-data";
-import type { ProblemRecord } from "@/lib/sync-types";
+import type { ManualSolve, ProblemRecord } from "@/lib/sync-types";
 import { localDateOf } from "@/lib/pace";
 
 export type Problem = {
@@ -19,6 +19,8 @@ export type Problem = {
   attempts: number;
   lang: string;
   runtimeMs: number;
+  /** logged by hand rather than synced from LeetCode */
+  manual?: boolean;
 };
 
 
@@ -57,7 +59,11 @@ export const PROBLEMS: Problem[] = DEMO.map((p) => ({
  * or after `startDate` (local days). Re-solving an old problem after the start date counts it,
  * dated by that new solve.
  */
-export function buildProblems(records: ProblemRecord[], startDate: string): Problem[] {
+export function buildProblems(
+  records: ProblemRecord[],
+  startDate: string,
+  manual: ManualSolve[] = [],
+): Problem[] {
   const out: Problem[] = [];
   for (const r of records) {
     const first = r.subs.find((s) => s.ok && localDateOf(s.t) >= startDate);
@@ -75,6 +81,26 @@ export function buildProblems(records: ProblemRecord[], startDate: string): Prob
       attempts: r.subs.filter((s) => localDateOf(s.t) >= startDate && s.t <= first.t).length,
       lang: first.lang,
       runtimeMs: first.rt ?? 0,
+    });
+  }
+
+  // Problems you logged by hand. A synced solve of the same problem wins, so solving it on
+  // LeetCode later (say you buy premium) never counts it twice.
+  const have = new Set(out.map((p) => p.slug));
+  for (const m of manual) {
+    if (have.has(m.slug) || m.solvedAt < startDate) continue;
+    out.push({
+      slug: m.slug,
+      number: m.number,
+      title: m.title,
+      difficulty: m.difficulty,
+      topic: topicOf(m.slug),
+      lists: listsOf(m.slug),
+      solvedAt: m.solvedAt,
+      attempts: 1,
+      lang: "",
+      runtimeMs: 0,
+      manual: true,
     });
   }
   return out;

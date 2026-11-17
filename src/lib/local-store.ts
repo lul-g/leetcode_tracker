@@ -12,9 +12,15 @@ export const KEYS = {
   submissions: "pacer.submissions",
   catalog: "pacer.catalog",
   meta: "pacer.meta",
+  manual: "pacer.manual",
 } as const;
 
+/** bump when the stored catalog gains fields, so it is refreshed on the next sync */
+export const CATALOG_VERSION = 2;
+
 export type StoredCatalog = {
+  /** CATALOG_VERSION when it was fetched */
+  v?: number;
   fetchedAt: number;
   entries: Record<string, CatalogEntry>;
   totals: ListTotals;

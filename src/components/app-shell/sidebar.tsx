@@ -3,7 +3,7 @@
 import { useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { PanelLeft, RefreshCw, Settings } from "lucide-react";
+import { PanelLeft, Plus, RefreshCw, Settings } from "lucide-react";
 import { LogoMark, APP_NAME } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -54,6 +54,7 @@ export function Sidebar() {
     listId,
     setListId,
     openSettings,
+    setManualOpen,
     settings,
     hydrated,
     isDemo,
@@ -135,6 +136,18 @@ export function Sidebar() {
             </Link>,
           );
         })}
+        {withTip(
+          "Log a solve",
+          <button
+            type="button"
+            onClick={() => setManualOpen(true)}
+            aria-label={collapsed ? "Log a solve" : undefined}
+            className={cn(itemClass, "mt-1 w-full", collapsed && "justify-center px-0")}
+          >
+            <Plus className="size-5 shrink-0" strokeWidth={1.8} />
+            {!collapsed && <span className="truncate">Log a solve</span>}
+          </button>,
+        )}
       </nav>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-3">

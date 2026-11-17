@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Flag, Search } from "lucide-react";
+import { Flag, Plus, Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { ListSwitcher } from "@/components/list-switcher";
 import { PersistedPanels } from "@/components/persisted-panels";
 import { Badge } from "@/components/ui/badge";
@@ -30,7 +31,17 @@ function dayLabel(d: string, today: string | null) {
 }
 
 export function ProblemsWorkspace() {
-  const { problems, difficulty, setDifficulty, today, list, lists, listId, setListId } = useApp();
+  const {
+    problems,
+    difficulty,
+    setDifficulty,
+    today,
+    list,
+    lists,
+    listId,
+    setListId,
+    setManualOpen,
+  } = useApp();
   const notes = useNotes();
   const desktop = useDesktop();
   const params = useSearchParams();
@@ -99,6 +110,10 @@ export function ProblemsWorkspace() {
       <header className="flex shrink-0 flex-col gap-3 border-b px-4 py-3 md:px-5">
         <div className="flex items-center gap-3">
           <h1 className="mr-auto text-lg font-semibold">Problems</h1>
+          <Button variant="outline" size="sm" onClick={() => setManualOpen(true)}>
+            <Plus data-icon="inline-start" />
+            Log a solve
+          </Button>
           <ListSwitcher value={listId} onChange={setListId} lists={lists} />
         </div>
         <div className="flex items-center gap-2">
@@ -173,9 +188,15 @@ export function ProblemsWorkspace() {
                             {p.title}
                           </span>
                           <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                            #{p.number} · {p.topic}
+                            {p.number > 0 ? `#${p.number} · ` : ""}
+                            {p.topic}
                           </span>
                         </span>
+                        {p.manual && (
+                          <Badge variant="secondary" className="h-5 shrink-0 px-2 text-[11px]">
+                            NeetCode
+                          </Badge>
+                        )}
                         {flagged && <Flag className="size-3.5 shrink-0 text-medium" />}
                         <Badge
                           variant="outline"

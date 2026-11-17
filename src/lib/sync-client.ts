@@ -7,6 +7,7 @@ import {
   whoami,
 } from "@/lib/lc-client";
 import {
+  CATALOG_VERSION,
   KEYS,
   loadCatalog,
   loadCredentials,
@@ -143,7 +144,7 @@ What LeetCode sent back (${firstNote})` : ""),
 async function refreshCatalog(solvedSlugs: string[], report: Report) {
   const cat = loadCatalog();
   const missing = solvedSlugs.filter((s) => !cat?.entries[s]);
-  const stale = !cat || Date.now() - cat.fetchedAt > WEEK;
+  const stale = !cat || cat.v !== CATALOG_VERSION || Date.now() - cat.fetchedAt > WEEK;
   if (!missing.length && !stale) return;
 
   report({ phase: "Loading problem details" });
@@ -151,6 +152,7 @@ async function refreshCatalog(solvedSlugs: string[], report: Report) {
   const want = Array.from(new Set([...solvedSlugs, ...NC150_SLUGS, ...BLIND75_SLUGS]));
   const res = await catalogFor(want);
   const merged: StoredCatalog = {
+    v: CATALOG_VERSION,
     fetchedAt: res.fetchedAt,
     entries: { ...(cat?.entries ?? {}), ...res.entries },
     totals: res.totals,

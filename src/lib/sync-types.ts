@@ -26,6 +26,19 @@ export type CatalogEntry = {
   title: string;
   /** 1 easy, 2 medium, 3 hard */
   d: 1 | 2 | 3;
+  /** premium: can't be opened on LeetCode without a subscription */
+  p?: boolean;
+};
+
+/** A problem you logged by hand, e.g. one you solved on NeetCode that LeetCode locks behind premium. */
+export type ManualSolve = {
+  slug: string;
+  title: string;
+  /** LeetCode problem number, 0 when unknown */
+  number: number;
+  difficulty: Difficulty;
+  /** local date you solved it (YYYY-MM-DD) */
+  solvedAt: string;
 };
 
 /** Problems per difficulty for each list that has slug data (plus "goal" = all of LeetCode). */

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarClock, ExternalLink, X } from "lucide-react";
+import { CalendarClock, ExternalLink, Trash2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { DIFFICULTIES, LISTS, type Difficulty } from "@/lib/data";
 import { addDays, daysBetween } from "@/lib/pace";
 import { leetcodeUrl, type Problem } from "@/lib/problems";
+import { useApp } from "@/lib/app-context";
 import { useNotes } from "@/lib/use-notes";
 import { cn } from "@/lib/utils";
 
@@ -58,6 +59,7 @@ export function ProblemDetail({
   onClose?: () => void;
 }) {
   const notes = useNotes();
+  const { removeManual } = useApp();
   const a = notes.get(problem.slug);
   const diff = DIFFICULTIES.find((d) => d.id === problem.difficulty)!;
   const due = today ? nextReview(problem.solvedAt, today) : null;
@@ -67,7 +69,9 @@ export function ProblemDetail({
     <div className="flex h-full min-h-0 flex-col">
       <header className="flex shrink-0 items-start justify-between gap-3 border-b px-5 py-4">
         <div className="min-w-0">
-          <p className="text-xs text-muted-foreground tabular-nums">#{problem.number}</p>
+          {problem.number > 0 && (
+            <p className="text-xs text-muted-foreground tabular-nums">#{problem.number}</p>
+          )}
           <h2 className="mt-0.5 text-lg leading-snug font-semibold">{problem.title}</h2>
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
             <Badge variant="outline" className={cn("h-6 px-2.5", DIFF_TEXT[problem.difficulty])}>
@@ -97,12 +101,34 @@ export function ProblemDetail({
       </header>
 
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-4">
-        <div className="grid grid-cols-2 gap-2">
-          <Fact label="First solved" value={fmt(problem.solvedAt)} />
-          <Fact label="Submissions" value={problem.attempts} />
-          <Fact label="Language" value={problem.lang} />
-          <Fact label="Runtime" value={`${problem.runtimeMs} ms`} />
-        </div>
+        {problem.manual ? (
+          <div className="space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <Fact label="Solved on" value={fmt(problem.solvedAt)} />
+              <Fact label="Logged from" value="NeetCode" />
+            </div>
+            <div className="flex items-center justify-between gap-3 rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground ring-1 ring-foreground/5">
+              <span>Logged by hand. If you solve it on LeetCode later, that solve replaces this.</span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="shrink-0 text-hard hover:text-hard"
+                onClick={() => removeManual(problem.slug)}
+              >
+                <Trash2 data-icon="inline-start" />
+                Remove
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-2">
+            <Fact label="First solved" value={fmt(problem.solvedAt)} />
+            <Fact label="Submissions" value={problem.attempts} />
+            <Fact label="Language" value={problem.lang} />
+            <Fact label="Runtime" value={`${problem.runtimeMs} ms`} />
+          </div>
+        )}
 
         <section className="space-y-2">
           <h3 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">

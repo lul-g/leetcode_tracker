@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { SettingsDialog } from "@/components/goal-dialog";
+import { ManualSolveDialog } from "@/components/problems/manual-solve-dialog";
 import { useApp } from "@/lib/app-context";
 import { StatusBanner } from "./status-banner";
 import { BottomNav } from "./bottom-nav";
@@ -33,6 +34,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         )}
       </main>
       <BottomNav />
+      <ManualSolveDialog />
       <SettingsDialog
         open={settingsOpen}
         onOpenChange={setSettingsOpen}
