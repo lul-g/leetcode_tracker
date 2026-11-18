@@ -71,7 +71,7 @@ export function PaceBarCard({ solves, settings, today }: PeriodCardProps) {
                 )}
               >
                 <div
-                  className={cn("absolute inset-y-0 left-0", s.catchUp ? "bg-solved/80" : "bg-solved")}
+                  className={cn("absolute inset-y-0 left-0 z-10", s.catchUp ? "bg-solved/80" : "bg-solved")}
                   style={{ width: `${filled * 100}%` }}
                 >
                   {/* the number again, in black, clipped to the green so it reads on green */}
@@ -88,7 +88,7 @@ export function PaceBarCard({ solves, settings, today }: PeriodCardProps) {
                 </div>
                 {hasTick && (
                   <div
-                    className="absolute inset-y-0 w-0.5 bg-foreground shadow-[0_0_0_1px_var(--background)]"
+                    className="absolute inset-y-0 z-20 w-0.5 bg-foreground shadow-[0_0_0_1px_var(--background)]"
                     style={{ left: `calc(${Math.min(1, tick) * 100}% - 1px)` }}
                     aria-label="Where you should be by tonight"
                   />
