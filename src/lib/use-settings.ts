@@ -49,9 +49,11 @@ export function useSettings() {
     }
   }, [raw]);
 
-  const update = useCallback((next: GoalSettings) => {
+  // merges into what's saved, so saving the goal never drops the weekly goal (and vice versa)
+  const update = useCallback((next: Partial<GoalSettings>) => {
     try {
-      localStorage.setItem(KEY, JSON.stringify(next));
+      const current = JSON.parse(localStorage.getItem(KEY) ?? "{}");
+      localStorage.setItem(KEY, JSON.stringify({ ...current, ...next }));
     } catch {}
     window.dispatchEvent(new Event(EVENT));
   }, []);

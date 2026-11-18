@@ -7,6 +7,13 @@ import { RangeCard } from "@/components/range-card";
 import { StreakCalendarCard } from "@/components/streak-calendar-card";
 import { TodayCard } from "@/components/today-card";
 import { TopicsCard } from "@/components/topics-card";
+import {
+  HistoryCard,
+  OverviewCard,
+  PerDayCard,
+  PeriodChartCard,
+  TargetCard,
+} from "@/components/targets/period-cards";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useApp } from "@/lib/app-context";
 import { HeroCard } from "./hero-card";
@@ -24,7 +31,8 @@ export type CardDef = {
  * The sticky difficulty filter narrows every card that shows activity. Goal math
  * (pace, today) always uses all difficulties, since the goal counts them all.
  */
-export function useCards(): Record<string, CardDef> {
+export function useCards(opts: { periodSwitch?: boolean } = {}): Record<string, CardDef> {
+  const periodSwitch = opts.periodSwitch ?? true;
   const { settings, today, solves, difficulty, openSettings } = useApp();
   const filtered = difficulty ? solves.filter((s) => s.difficulty === difficulty) : solves;
 
@@ -88,6 +96,34 @@ export function useCards(): Record<string, CardDef> {
       node: ready((t) => (
         <TopicsCard solves={filtered} startDate={settings.startDate} today={t} />
       )),
+    },
+    // period targets: goal math, so they use every difficulty
+    "p-target": {
+      label: "Period target",
+      description: "What you need this week/month/quarter to be on pace",
+      node: ready((t) => <TargetCard solves={solves} settings={settings} today={t} showSwitch={periodSwitch} />),
+    },
+    "p-perday": {
+      label: "Per work day",
+      description: "What's needed each work day until the period ends",
+      node: ready((t) => <PerDayCard solves={solves} settings={settings} today={t} showSwitch={periodSwitch} />),
+    },
+    "p-chart": {
+      label: "Period chart",
+      description: "Solved vs. normal pace, day by day or week by week",
+      node: ready((t) => (
+        <PeriodChartCard solves={solves} settings={settings} today={t} showSwitch={periodSwitch} />
+      )),
+    },
+    "p-history": {
+      label: "Period history",
+      description: "How the last weeks/months went",
+      node: ready((t) => <HistoryCard solves={solves} settings={settings} today={t} showSwitch={periodSwitch} />),
+    },
+    "p-overview": {
+      label: "All periods",
+      description: "Week, month, quarter and 6 mo at a glance",
+      node: ready((t) => <OverviewCard solves={solves} settings={settings} today={t} />),
     },
     recent: {
       label: "Recent solves",

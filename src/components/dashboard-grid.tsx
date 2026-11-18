@@ -29,84 +29,25 @@ import type { CardDef } from "@/components/cards/registry";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  COLS,
+  MAX_H,
+  MIN_H,
+  MIN_W,
+  clamp,
+  layoutRead,
+  layoutSubscribe,
+  normalize,
+  persistLayout as persist,
+  sizeOf,
+  type LayoutItem as Item,
+} from "@/lib/dashboard-layout";
 import { useDesktop } from "@/lib/use-desktop";
 import { cn } from "@/lib/utils";
 
-type Item = { id: string; w: number; h: number };
-
-const KEY = "lc-tracker-layout-v3";
-const EVENT = "lc-tracker-layout-change";
-const COLS = 12;
 const ROW = 64; // px per height unit
 const GAP = 16;
-const MIN_W = 3;
-const MIN_H = 3;
-const MAX_H = 14;
 
-/** Size each card starts at when it is added (columns x row units). */
-const DEFAULT_SIZE: Record<string, { w: number; h: number }> = {
-  hero: { w: 4, h: 6 },
-  pace: { w: 8, h: 9 },
-  today: { w: 4, h: 3 },
-  range: { w: 8, h: 7 },
-  calendar: { w: 4, h: 7 },
-  heatmap: { w: 12, h: 4 },
-  recent: { w: 6, h: 6 },
-  topics: { w: 6, h: 6 },
-};
-const FALLBACK = { w: 6, h: 6 };
-
-/** What a fresh dashboard shows; everything else is one click away in "Customize". */
-const DEFAULT_VISIBLE = ["hero", "pace", "today", "calendar", "range"];
-
-const sizeOf = (id: string) => DEFAULT_SIZE[id] ?? FALLBACK;
-const defaults = (ids: string[]): Item[] =>
-  DEFAULT_VISIBLE.filter((id) => ids.includes(id)).map((id) => ({ id, ...sizeOf(id) }));
-
-const clamp = (n: number, lo: number, hi: number) =>
-  Math.min(hi, Math.max(lo, Math.round(n)));
-
-const subscribe = (cb: () => void) => {
-  window.addEventListener("storage", cb);
-  window.addEventListener(EVENT, cb);
-  return () => {
-    window.removeEventListener("storage", cb);
-    window.removeEventListener(EVENT, cb);
-  };
-};
-const read = () => {
-  try {
-    return localStorage.getItem(KEY);
-  } catch {
-    return null;
-  }
-};
-
-/** A saved layout is the list of cards you chose, in order, with their sizes. */
-function normalize(saved: unknown, ids: string[]): Item[] {
-  if (!Array.isArray(saved)) return defaults(ids);
-  const seen = new Set<string>();
-  const out: Item[] = [];
-  for (const s of saved) {
-    if (!s || !ids.includes(s.id) || seen.has(s.id)) continue;
-    seen.add(s.id);
-    const base = sizeOf(s.id);
-    out.push({
-      id: s.id,
-      w: clamp(Number(s.w) || base.w, MIN_W, COLS),
-      h: clamp(Number(s.h) || base.h, MIN_H, MAX_H),
-    });
-  }
-  return out;
-}
-
-function persist(items: Item[] | null) {
-  try {
-    if (items) localStorage.setItem(KEY, JSON.stringify(items));
-    else localStorage.removeItem(KEY);
-  } catch {}
-  window.dispatchEvent(new Event(EVENT));
-}
 
 /**
  * Cards on a 12-column grid. Desktop: drag a card to reorder it, drag its bottom-right corner
@@ -123,7 +64,7 @@ export function DashboardGrid({
   const desktop = useDesktop();
   const ids = Object.keys(cards).join("|");
   const idList = useMemo(() => ids.split("|"), [ids]);
-  const raw = useSyncExternalStore(subscribe, read, () => null);
+  const raw = useSyncExternalStore(layoutSubscribe, layoutRead, () => null);
   const stored = useMemo(() => {
     try {
       return normalize(raw ? JSON.parse(raw) : null, idList);

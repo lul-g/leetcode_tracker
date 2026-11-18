@@ -7,6 +7,8 @@ export type GoalSettings = {
   goal: number;
   startDate: string; // YYYY-MM-DD
   targetDate: string; // YYYY-MM-DD
+  /** problems per week you aim for; absent/null = the app works it out from the goal */
+  weeklyGoal?: number | null;
 };
 
 export type PaceStatus =

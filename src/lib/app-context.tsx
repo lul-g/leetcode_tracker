@@ -27,7 +27,7 @@ export type SettingsTab = "goal" | "leetcode" | "sync";
 
 type AppState = {
   settings: GoalSettings;
-  updateSettings: (s: GoalSettings) => void;
+  updateSettings: (s: Partial<GoalSettings>) => void;
   /** local date; null until the page has mounted */
   today: string | null;
   /** only problems solved on/after the start date */

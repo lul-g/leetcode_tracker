@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   ListChecks,
   Shapes,
+  Target,
   TrendingUp,
   type LucideIcon,
 } from "lucide-react";
@@ -16,6 +17,7 @@ export const NAV: NavItem[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/problems", label: "Problems", icon: ListChecks },
   { href: "/progress", label: "Progress", icon: TrendingUp },
+  { href: "/targets", label: "Targets", icon: Target },
   { href: "/topics", label: "Topics", icon: Shapes },
 ];
 
