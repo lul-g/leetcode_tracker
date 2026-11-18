@@ -91,16 +91,16 @@ export function PaceBarCard({ solves, settings, today }: PeriodCardProps) {
                 </span>
               </div>
               {hasTick && (
-                // one continuous line through the bar and its label, centred on the divider when it falls at a segment's end
+                // overshoots the bar by the same amount above and below (label row is 24px tall), never reaching the card's edges
                 <div
-                  className="pointer-events-none absolute inset-y-0 z-20 w-[3px] -translate-x-1/2 bg-foreground"
-                  style={{ left: `${Math.min(1, tick) * 100}%` }}
+                  className="pointer-events-none absolute z-20 w-1 -translate-x-1/2 rounded-full bg-foreground"
+                  style={{ left: `${Math.min(1, tick) * 100}%`, top: -6, bottom: 24 - 6 }}
                   aria-label="Where you should be by tonight"
                 />
               )}
               <span
                 className={cn(
-                  "truncate px-1 py-1 text-center text-[11px] text-muted-foreground",
+                  "h-6 truncate px-1 py-1 text-center text-[11px] text-muted-foreground",
                   s.catchUp && "text-hard",
                 )}
               >

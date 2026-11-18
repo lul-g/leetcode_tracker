@@ -174,7 +174,7 @@ export function DashboardGrid({
         {header}
         {empty}
         {items.map((x) => (
-          <div key={x.id} className="h-[34rem] min-h-0">
+          <div key={x.id} className={cn("min-h-0", x.id === "p-bar" ? "h-44" : "h-[34rem]")}>
             {cards[x.id].node}
           </div>
         ))}
