@@ -73,7 +73,19 @@ export function PaceBarCard({ solves, settings, today }: PeriodCardProps) {
                 <div
                   className={cn("absolute inset-y-0 left-0", s.catchUp ? "bg-solved/80" : "bg-solved")}
                   style={{ width: `${filled * 100}%` }}
-                />
+                >
+                  {/* the number again, in black, clipped to the green so it reads on green */}
+                  {filled > 0 && (
+                    <span
+                      className="absolute inset-y-0 left-0 text-black"
+                      style={{ width: `${100 / filled}%` }}
+                    >
+                      <span className="absolute right-1.5 bottom-1 text-[10px] leading-none font-medium tabular-nums">
+                        {n(s.size)}
+                      </span>
+                    </span>
+                  )}
+                </div>
                 {hasTick && (
                   <div
                     className="absolute inset-y-0 w-0.5 bg-foreground shadow-[0_0_0_1px_var(--background)]"
