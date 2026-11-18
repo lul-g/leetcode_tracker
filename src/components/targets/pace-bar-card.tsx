@@ -93,7 +93,7 @@ export function PaceBarCard({ solves, settings, today }: PeriodCardProps) {
               {hasTick && (
                 // one continuous line through the bar and its label, centred on the divider when it falls at a segment's end
                 <div
-                  className="pointer-events-none absolute inset-y-0 z-20 w-0.5 -translate-x-1/2 bg-foreground"
+                  className="pointer-events-none absolute inset-y-0 z-20 w-[3px] -translate-x-1/2 bg-foreground"
                   style={{ left: `${Math.min(1, tick) * 100}%` }}
                   aria-label="Where you should be by tonight"
                 />
