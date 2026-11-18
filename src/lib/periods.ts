@@ -222,3 +222,93 @@ export function pastPeriods(
   }
   return out;
 }
+
+export type BarSlice = {
+  label: string;
+  /** width of the slice: what normally has to be done in it */
+  size: number;
+  /** where the slice starts along the bar */
+  from: number;
+};
+
+export type PaceBar = {
+  kind: PeriodKind;
+  label: string;
+  /** catch-up carried in from earlier periods, drawn as the first stretch of the bar */
+  catchUp: number;
+  slices: BarSlice[];
+  /** length of the whole bar: catch-up plus the period's normal number */
+  length: number;
+  /** how far along you are (your solves, plus any credit for being ahead going in) */
+  done: number;
+  /** how far along you should be by the end of today */
+  expected: number;
+  /** done - expected: positive = ahead */
+  delta: number;
+  left: number;
+};
+
+/** The pieces a period is cut into: days for a week, weeks for a month, months for a quarter or 6 mo. */
+function cut(kind: PeriodKind, start: string, end: string): { label: string; a: string; b: string }[] {
+  const out: { label: string; a: string; b: string }[] = [];
+  if (kind === "week") {
+    const names = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+    for (let i = 0; i < 5; i++) out.push({ label: names[i], a: addDays(start, i), b: addDays(start, i) });
+  } else if (kind === "month") {
+    for (let w = periodRange("week", start).start; w <= end; w = addDays(w, 7)) {
+      const a = w < start ? start : w;
+      const e = addDays(w, 6);
+      out.push({ label: short(a), a, b: e > end ? end : e });
+    }
+  } else {
+    for (let m = start; m <= end; ) {
+      const r = periodRange("month", m);
+      out.push({ label: MONTHS[Number(r.start.slice(5, 7)) - 1], a: r.start, b: r.end });
+      m = addDays(r.end, 1);
+    }
+  }
+  return out;
+}
+
+/**
+ * The single bar for the current period. Its length is what it takes to be on pace (catch-up first,
+ * then the normal number), cut into days / weeks / months. `done` fills it from the left and
+ * `expected` marks where you should be by tonight.
+ */
+export function computeBar(solves: Solve[], s: GoalSettings, today: string, kind: PeriodKind): PaceBar {
+  const rate = weeklyGoalOf(s) / WORKDAYS_PER_WEEK;
+  const p = computePeriod(solves, s, today, kind, 0);
+  const catchUp = Math.max(0, p.carry);
+  const credit = Math.max(0, -p.carry);
+
+  const inPlan = (a: string, b: string) => {
+    const x = a < s.startDate ? s.startDate : a;
+    const y = b > s.targetDate ? s.targetDate : b;
+    return { x, y };
+  };
+
+  let cursor = catchUp;
+  let expected = catchUp;
+  const slices: BarSlice[] = [];
+  for (const c of cut(kind, p.start, p.end)) {
+    const { x, y } = inPlan(c.a, c.b);
+    const size = rate * workdaysBetween(x, y);
+    if (size <= 0) continue;
+    slices.push({ label: c.label, size, from: cursor });
+    cursor += size;
+    expected += rate * workdaysBetween(x, y < today ? y : today);
+  }
+
+  const done = p.solved + credit;
+  return {
+    kind,
+    label: p.label,
+    catchUp,
+    slices,
+    length: cursor,
+    done,
+    expected,
+    delta: done - expected,
+    left: Math.max(0, cursor - done),
+  };
+}

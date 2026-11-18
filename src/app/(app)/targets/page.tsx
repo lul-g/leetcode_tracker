@@ -50,6 +50,7 @@ export default function TargetsPage() {
         </div>
         <WeeklyGoal />
         <div className="grid gap-4 lg:grid-cols-12">
+          {cell("p-bar", "h-48 lg:col-span-12")}
           {cell("p-target", "h-[26rem] lg:col-span-5")}
           {cell("p-chart", "h-[26rem] lg:col-span-7")}
           {cell("p-perday", "h-64 lg:col-span-4")}

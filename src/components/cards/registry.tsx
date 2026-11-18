@@ -14,6 +14,7 @@ import {
   PeriodChartCard,
   TargetCard,
 } from "@/components/targets/period-cards";
+import { PaceBarCard } from "@/components/targets/pace-bar-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useApp } from "@/lib/app-context";
 import { HeroCard } from "./hero-card";
@@ -98,6 +99,11 @@ export function useCards(opts: { periodSwitch?: boolean } = {}): Record<string, 
       )),
     },
     // period targets: goal math, so they use every difficulty
+    "p-bar": {
+      label: "Pace bar",
+      description: "One bar for the week, month, quarter or 6 mo: how far along, and where you should be",
+      node: ready((t) => <PaceBarCard solves={solves} settings={settings} today={t} />),
+    },
     "p-target": {
       label: "Period target",
       description: "What you need this week/month/quarter to be on pace",

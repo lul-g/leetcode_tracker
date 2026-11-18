@@ -26,6 +26,7 @@ const DEFAULT_SIZE: Record<string, { w: number; h: number }> = {
   heatmap: { w: 12, h: 4 },
   recent: { w: 6, h: 6 },
   topics: { w: 6, h: 6 },
+  "p-bar": { w: 12, h: 3 },
   "p-target": { w: 4, h: 6 },
   "p-perday": { w: 4, h: 4 },
   "p-chart": { w: 8, h: 6 },
@@ -35,7 +36,7 @@ const DEFAULT_SIZE: Record<string, { w: number; h: number }> = {
 const FALLBACK = { w: 6, h: 6 };
 
 /** What a fresh dashboard shows; everything else is one click away in "Customize". */
-const DEFAULT_VISIBLE = ["hero", "pace", "today", "calendar", "range"];
+const DEFAULT_VISIBLE = ["p-bar", "hero", "pace", "today", "calendar", "range"];
 
 export const sizeOf = (id: string) => DEFAULT_SIZE[id] ?? FALLBACK;
 const defaults = (ids: string[]): LayoutItem[] =>
