@@ -63,7 +63,7 @@ export function PaceBarCard({ solves, settings, today }: PeriodCardProps) {
           // the tick sits in the segment where "should be here by tonight" falls (its end counts)
           const hasTick = bar.length > 0 && tick > 0 && tick <= 1;
           return (
-            <div key={s.key} className="flex min-w-0 flex-col" style={{ flexGrow: s.size, flexBasis: 0 }}>
+            <div key={s.key} className="relative flex min-w-0 flex-col" style={{ flexGrow: s.size, flexBasis: 0 }}>
               <div
                 className={cn(
                   "relative min-h-0 flex-1 overflow-hidden bg-muted",
@@ -86,17 +86,18 @@ export function PaceBarCard({ solves, settings, today }: PeriodCardProps) {
                     </span>
                   )}
                 </div>
-                {hasTick && (
-                  <div
-                    className="absolute inset-y-0 z-20 w-0.5 bg-foreground shadow-[0_0_0_1px_var(--background)]"
-                    style={{ left: `calc(${Math.min(1, tick) * 100}% - 1px)` }}
-                    aria-label="Where you should be by tonight"
-                  />
-                )}
                 <span className="absolute right-1.5 bottom-1 text-[10px] leading-none text-foreground/70 tabular-nums">
                   {n(s.size)}
                 </span>
               </div>
+              {hasTick && (
+                // one continuous line through the bar and its label, centred on the divider when it falls at a segment's end
+                <div
+                  className="pointer-events-none absolute inset-y-0 z-20 w-0.5 -translate-x-1/2 bg-foreground"
+                  style={{ left: `${Math.min(1, tick) * 100}%` }}
+                  aria-label="Where you should be by tonight"
+                />
+              )}
               <span
                 className={cn(
                   "truncate px-1 py-1 text-center text-[11px] text-muted-foreground",
