@@ -71,7 +71,7 @@ export function PaceBarCard({ solves, settings, today }: PeriodCardProps) {
                 )}
               >
                 <div
-                  className={cn("absolute inset-y-0 left-0 z-10", s.catchUp ? "bg-solved/80" : "bg-solved")}
+                  className={cn("absolute inset-y-0 left-0 z-10 overflow-hidden", s.catchUp ? "bg-solved/80" : "bg-solved")}
                   style={{ width: `${filled * 100}%` }}
                 >
                   {/* the number again, in black, clipped to the green so it reads on green */}
