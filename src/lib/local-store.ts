@@ -16,7 +16,7 @@ export const KEYS = {
 } as const;
 
 /** bump when the stored catalog gains fields, so it is refreshed on the next sync */
-export const CATALOG_VERSION = 2;
+export const CATALOG_VERSION = 3;
 
 export type StoredCatalog = {
   /** CATALOG_VERSION when it was fetched */

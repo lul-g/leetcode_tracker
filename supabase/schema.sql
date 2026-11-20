@@ -3,7 +3,7 @@
 --
 --   pacer_problems       one row per problem you've solved on LeetCode, with every submission
 --   pacer_manual_solves  problems you logged by hand (e.g. premium ones solved on NeetCode)
---   pacer_notes          your notes and "needs review" flags, one row per problem
+--   pacer_notes          your notes, "needs review" flags (and why), categories, one row per problem
 --   pacer_settings       goal and dates, dashboard layout
 --   pacer_secrets        your LeetCode cookie, kept apart from everything else
 --
@@ -38,10 +38,19 @@ create table if not exists public.pacer_notes (
   slug         text        primary key,
   note         text        not null default '',
   needs_review boolean     not null default false,
+  review_reason text,
+  category      text,
+  redone        jsonb,
   deleted      boolean     not null default false,
   edited_at    bigint      not null default 0,
   updated_at   timestamptz not null default now()
 );
+
+-- Added after the first version: why a problem was flagged ('hint' or 'solution'), your own category
+-- for it, and the days you redid it. Safe to run on a table that already has them.
+alter table public.pacer_notes add column if not exists review_reason text;
+alter table public.pacer_notes add column if not exists category      text;
+alter table public.pacer_notes add column if not exists redone        jsonb;
 
 create table if not exists public.pacer_settings (
   key        text        primary key,

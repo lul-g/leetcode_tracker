@@ -22,6 +22,7 @@ export function buildRecords(
       title: e?.title ?? titleFromSlug(slug),
       difficulty: LEVEL[e?.d ?? 2],
       topic: topicOf(slug),
+      tags: e?.g ?? [],
       lists: listsOf(slug),
       subs: list.map((s) => ({ t: s.t, ok: s.ok, lang: s.lang, rt: s.rt })),
     });

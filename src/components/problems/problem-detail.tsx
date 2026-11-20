@@ -1,12 +1,15 @@
 "use client";
 
-import Link from "next/link";
+import { useMemo } from "react";
 import { CalendarClock, ExternalLink, Trash2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { categoryOf, customCategories } from "@/lib/categories";
+import { CategoryPicker } from "./category-picker";
 import { DIFFICULTIES, LISTS, type Difficulty } from "@/lib/data";
 import { addDays, daysBetween } from "@/lib/pace";
 import { leetcodeUrl, type Problem } from "@/lib/problems";
@@ -19,6 +22,9 @@ export const DIFF_TEXT: Record<Difficulty, string> = {
   medium: "text-medium",
   hard: "text-hard",
 };
+/** A selected toggle must be obvious, so it gets the solid accent instead of the faint default. */
+export const SELECTED = "aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:bg-primary/90";
+
 export const DIFF_BG: Record<Difficulty, string> = {
   easy: "bg-easy",
   medium: "bg-medium",
@@ -59,8 +65,14 @@ export function ProblemDetail({
   onClose?: () => void;
 }) {
   const notes = useNotes();
-  const { removeManual } = useApp();
+  const { removeManual, problems } = useApp();
   const a = notes.get(problem.slug);
+  const category = categoryOf(problem, a);
+  const custom = useMemo(() => customCategories(notes.all), [notes.all]);
+  const allTags = useMemo(
+    () => [...new Set(problems.flatMap((p) => p.tags))].sort((x, y) => x.localeCompare(y)),
+    [problems],
+  );
   const diff = DIFFICULTIES.find((d) => d.id === problem.difficulty)!;
   const due = today ? nextReview(problem.solvedAt, today) : null;
   const inDays = due && today ? daysBetween(today, due) : null;
@@ -77,9 +89,19 @@ export function ProblemDetail({
             <Badge variant="outline" className={cn("h-6 px-2.5", DIFF_TEXT[problem.difficulty])}>
               {diff.label}
             </Badge>
-            <Badge variant="secondary" className="h-6 px-2.5">
-              {problem.topic}
-            </Badge>
+            <CategoryPicker
+              value={category}
+              isOverride={!!a.category}
+              defaultLabel={problem.topic}
+              custom={custom}
+              tags={allTags}
+              onPick={(c) => notes.set(problem.slug, { category: c ?? undefined })}
+            />
+            {problem.tags.map((t) => (
+              <Badge key={t} variant="outline" className="h-6 px-2.5 font-normal text-muted-foreground">
+                {t}
+              </Badge>
+            ))}
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
@@ -151,7 +173,7 @@ export function ProblemDetail({
             <span className="flex flex-col">
               <span className="text-sm font-medium">Needs review</span>
               <span className="text-xs text-muted-foreground">
-                Flag it to come back to later
+                Flag it to do again, e.g. you needed a hint or a solution
               </span>
             </span>
             <Switch
@@ -159,6 +181,33 @@ export function ProblemDetail({
               onCheckedChange={(v) => notes.set(problem.slug, { review: v })}
             />
           </label>
+          {a.review && (
+            <div className="space-y-1.5">
+              <p className="text-xs text-muted-foreground">What did you need?</p>
+              <ToggleGroup
+                value={a.reason ? [a.reason] : []}
+                onValueChange={(v) =>
+                  notes.set(problem.slug, { reason: (v[0] as "hint" | "solution" | undefined) ?? undefined })
+                }
+                variant="outline"
+                size="sm"
+                aria-label="Why it needs review"
+              >
+                <ToggleGroupItem value="hint" className={cn("px-3 text-xs", SELECTED)}>
+                  Used hints
+                </ToggleGroupItem>
+                <ToggleGroupItem value="solution" className={cn("px-3 text-xs", SELECTED)}>
+                  Saw the solution
+                </ToggleGroupItem>
+              </ToggleGroup>
+            </div>
+          )}
+          {a.redone && a.redone.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              Redone {a.redone.length === 1 ? "once" : `${a.redone.length} times`}:{" "}
+              {a.redone.map((d) => fmt(d, { month: "short", day: "numeric" })).join(", ")}
+            </p>
+          )}
           {inDays !== null && due && (
             <p className="flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground ring-1 ring-foreground/5">
               <CalendarClock className="size-4 shrink-0" />
@@ -180,12 +229,6 @@ export function ProblemDetail({
           />
         </section>
 
-        <Link
-          href="/topics"
-          className="inline-block text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-        >
-          See all of {problem.topic}
-        </Link>
       </div>
     </div>
   );

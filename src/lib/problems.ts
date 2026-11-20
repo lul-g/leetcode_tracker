@@ -11,6 +11,8 @@ export type Problem = {
   difficulty: Difficulty;
   /** NeetCode 150 category */
   topic: string;
+  /** LeetCode's own topic tags (secondary to the category) */
+  tags: string[];
   /** ids of the lists this problem belongs to (see LISTS in data.ts) */
   lists: string[];
   /** local date of the first accepted submission (YYYY-MM-DD) */
@@ -25,7 +27,7 @@ export type Problem = {
 
 
 // DEMO ONLY: replaced by the synced submission history. 20 solves over 14 days.
-const DEMO: Problem[] = [
+const DEMO: Omit<Problem, "tags">[] = [
   { slug: "contains-duplicate", number: 217, title: "Contains Duplicate", difficulty: "easy", topic: "Arrays & Hashing", lists: [], solvedAt: "2026-11-02", attempts: 1, lang: "Python3", runtimeMs: 12 },
   { slug: "valid-anagram", number: 242, title: "Valid Anagram", difficulty: "easy", topic: "Arrays & Hashing", lists: [], solvedAt: "2026-11-03", attempts: 2, lang: "Python3", runtimeMs: 38 },
   { slug: "two-sum", number: 1, title: "Two Sum", difficulty: "easy", topic: "Arrays & Hashing", lists: [], solvedAt: "2026-11-03", attempts: 1, lang: "Python3", runtimeMs: 7 },
@@ -50,6 +52,7 @@ const DEMO: Problem[] = [
 
 export const PROBLEMS: Problem[] = DEMO.map((p) => ({
   ...p,
+  tags: [],
   topic: topicOf(p.slug),
   lists: listsOf(p.slug),
 }));
@@ -75,6 +78,7 @@ export function buildProblems(
       title: r.title,
       difficulty: r.difficulty,
       topic: r.topic,
+      tags: r.tags ?? [],
       lists: r.lists,
       solvedAt,
       // submissions since the start date, up to and including the one that counted
@@ -95,6 +99,7 @@ export function buildProblems(
       title: m.title,
       difficulty: m.difficulty,
       topic: topicOf(m.slug),
+      tags: [],
       lists: listsOf(m.slug),
       solvedAt: m.solvedAt,
       attempts: 1,

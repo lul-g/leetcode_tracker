@@ -17,7 +17,17 @@ import type { Problem } from "@/lib/problems";
 import { useNotes } from "@/lib/use-notes";
 import { useDesktop } from "@/lib/use-desktop";
 import { cn } from "@/lib/utils";
+import { categoryOf } from "@/lib/categories";
 import { DIFF_BG, DIFF_TEXT, DetailEmpty, ProblemDetail } from "./problem-detail";
+import {
+  NO_FILTERS,
+  ProblemFilters,
+  REDO_LABELS,
+  activeCount,
+  matches,
+  redoRank,
+  type Filters,
+} from "./problem-filters";
 
 function dayLabel(d: string, today: string | null) {
   if (today && d === today) return "Today";
@@ -47,21 +57,31 @@ export function ProblemsWorkspace() {
   const params = useSearchParams();
   const [query, setQuery] = useState("");
   const [picked, setPicked] = useState<string | null>(params.get("p"));
+  const [filters, setFilters] = useState<Filters>(NO_FILTERS);
+  const inList = useMemo(() => problems.filter((p) => p.lists.includes(listId)), [problems, listId]);
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return problems
-      .filter((p) => p.lists.includes(listId))
+    const recent = (a: Problem, b: Problem) =>
+      a.solvedAt === b.solvedAt ? b.number - a.number : a.solvedAt < b.solvedAt ? 1 : -1;
+    return inList
       .filter((p) => !difficulty || p.difficulty === difficulty)
+      .filter((p) => matches(p, notes.get(p.slug), filters))
       .filter(
         (p) =>
           !q ||
           p.title.toLowerCase().includes(q) ||
-          p.topic.toLowerCase().includes(q) ||
+          categoryOf(p, notes.get(p.slug)).toLowerCase().includes(q) ||
+          p.tags.some((t) => t.toLowerCase().includes(q)) ||
           String(p.number) === q,
       )
-      .sort((a, b) => (a.solvedAt === b.solvedAt ? b.number - a.number : a.solvedAt < b.solvedAt ? 1 : -1));
-  }, [problems, listId, difficulty, query]);
+      .sort((a, b) =>
+        filters.sort === "redo"
+          ? redoRank(notes.get(a.slug)) - redoRank(notes.get(b.slug)) || recent(a, b)
+          : recent(a, b),
+      );
+  }, [inList, difficulty, query, filters, notes]);
+  const filtering = query !== "" || activeCount(filters, difficulty) > 0;
 
   const selected =
     visible.find((p) => p.slug === picked) ?? (desktop ? visible[0] : undefined);
@@ -94,16 +114,23 @@ export function ProblemsWorkspace() {
     return () => window.removeEventListener("keydown", onKey);
   }, [visible, selected, select]);
 
-  // group rows by solve date
+  // group rows by solve date, or by how much they need a redo when sorting "redo first"
   const groups = useMemo(() => {
-    const out: { date: string; items: Problem[] }[] = [];
+    const out: { key: string; label: string; unit: string; items: Problem[] }[] = [];
     for (const p of visible) {
+      const key = filters.sort === "redo" ? String(redoRank(notes.get(p.slug))) : p.solvedAt;
       const last = out[out.length - 1];
-      if (last && last.date === p.solvedAt) last.items.push(p);
-      else out.push({ date: p.solvedAt, items: [p] });
+      if (last && last.key === key) last.items.push(p);
+      else
+        out.push({
+          key,
+          label: filters.sort === "redo" ? REDO_LABELS[Number(key)] : dayLabel(key, today),
+          unit: filters.sort === "redo" ? "problems" : "solved",
+          items: [p],
+        });
     }
     return out;
-  }, [visible]);
+  }, [visible, filters.sort, notes, today]);
 
   const index = (
     <section aria-label="Problems" className="flex h-full min-w-0 flex-1 flex-col">
@@ -146,25 +173,35 @@ export function ProblemsWorkspace() {
               </ToggleGroupItem>
             ))}
           </ToggleGroup>
+          <ProblemFilters
+            problems={inList}
+            notes={notes.all}
+            filters={filters}
+            onChange={setFilters}
+            difficulty={difficulty}
+            onDifficulty={setDifficulty}
+          />
         </div>
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto pb-6">
         {groups.length === 0 ? (
           <div className="px-6 py-16 text-center">
-            <p className="font-medium">{query || difficulty ? "No matches" : "Nothing solved yet"}</p>
+            <p className="font-medium">{filtering ? "No matches" : "Nothing solved yet"}</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              {query || difficulty
+              {filtering
                 ? "Try a different search or filter."
                 : `Solved problems in ${list.name} will show up here.`}
             </p>
           </div>
         ) : (
           groups.map((g) => (
-            <div key={g.date}>
+            <div key={g.key}>
               <div className="sticky top-0 z-10 flex items-center justify-between bg-background/95 px-4 py-1.5 text-xs font-medium text-muted-foreground backdrop-blur md:px-5">
-                <span>{dayLabel(g.date, today)}</span>
-                <span className="tabular-nums">{g.items.length} solved</span>
+                <span>{g.label}</span>
+                <span className="tabular-nums">
+                  {g.items.length} {g.unit}
+                </span>
               </div>
               <ul>
                 {g.items.map((p) => {
@@ -189,7 +226,7 @@ export function ProblemsWorkspace() {
                           </span>
                           <span className="mt-0.5 block truncate text-xs text-muted-foreground">
                             {p.number > 0 ? `#${p.number} · ` : ""}
-                            {p.topic}
+                            {categoryOf(p, notes.get(p.slug))}
                           </span>
                         </span>
                         {p.manual && (

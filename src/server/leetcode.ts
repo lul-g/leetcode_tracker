@@ -96,7 +96,7 @@ const LEVEL = { Easy: 1, Medium: 2, Hard: 3 } as const;
 const LIST_QUERY = `query p($categorySlug: String, $limit: Int, $skip: Int, $filters: QuestionListFilterInput) {
   problemsetQuestionList: questionList(categorySlug: $categorySlug, limit: $limit, skip: $skip, filters: $filters) {
     total: totalNum
-    questions: data { questionFrontendId title titleSlug difficulty isPaidOnly }
+    questions: data { questionFrontendId title titleSlug difficulty isPaidOnly topicTags { name } }
   }
 }`;
 
@@ -109,6 +109,7 @@ type ListPage = {
       titleSlug: string;
       difficulty: keyof typeof LEVEL;
       isPaidOnly: boolean;
+      topicTags?: { name: string }[];
     }[];
   };
 };
@@ -137,6 +138,7 @@ export async function fetchCatalog(): Promise<Record<string, CatalogEntry>> {
         title: q.title,
         d: LEVEL[q.difficulty] ?? 2,
         p: q.isPaidOnly,
+        g: (q.topicTags ?? []).map((t) => t.name),
       };
     }
   }

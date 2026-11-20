@@ -17,7 +17,7 @@ const DB_PROBLEMS: Record<string, { title: string; fix: React.ReactNode }> = {
     fix: (
       <>
         In Supabase open the <b>SQL Editor</b> and run the contents of{" "}
-        <code>supabase/schema.sql</code>.
+        <code>supabase/schema.sql</code> (run it again after an update; it only adds what&apos;s missing).
       </>
     ),
   },

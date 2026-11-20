@@ -104,7 +104,7 @@ function keyKind(key: string | undefined): "publishable" | "secret" | "unknown" 
 function classify(error: { code?: string; message?: string } | null): DbHealth {
   if (!error) return "ok";
   const msg = error.message ?? "";
-  if (error.code === "42P01" || error.code === "PGRST205" || /does not exist|schema cache|could not find the table/i.test(msg))
+  if (error.code === "42P01" || error.code === "42703" || error.code === "PGRST204" || error.code === "PGRST205" || /does not exist|schema cache|could not find (the )?(table|column)/i.test(msg))
     return "missing_table";
   if (error.code === "42501" || /permission denied|row-level security|not allowed/i.test(msg))
     // a publishable key is simply the wrong key; anything else was refused for lack of a grant
@@ -124,7 +124,8 @@ export async function dbHealth(): Promise<DbHealth> {
   try {
     const results = await Promise.all(
       TABLES.map(async (t) => {
-        const { error } = await db().from(DEF[t].name).select(DEF[t].pk).limit(1);
+        const cols = t === "notes" ? `${DEF[t].pk},review_reason,category,redone` : DEF[t].pk;
+        const { error } = await db().from(DEF[t].name).select(cols).limit(1);
         return classify(error);
       }),
     );
@@ -169,8 +170,20 @@ function toRow(table: Table, r: DbRow): Row {
         }),
         editedAt,
       };
-    case "notes":
-      return { value: canonical({ note: r.note, review: r.needs_review }), editedAt };
+    case "notes": {
+      const redone = Array.isArray(r.redone) ? r.redone : [];
+      return {
+        value: canonical({
+          note: r.note,
+          review: r.needs_review,
+          // optional parts are left out when empty, matching how the browser writes them
+          ...(r.review_reason ? { reason: r.review_reason } : {}),
+          ...(r.category ? { category: r.category } : {}),
+          ...(redone.length ? { redone } : {}),
+        }),
+        editedAt,
+      };
+    }
     default:
       return { value: canonical(r.value ?? null), editedAt };
   }
@@ -203,8 +216,24 @@ export function validChange(c: InChange): boolean {
     );
   }
   if (c.table === "notes") {
-    const n = v as { note?: unknown; review?: unknown } | null;
-    return !!n && typeof n.note === "string" && typeof n.review === "boolean";
+    const n = v as {
+      note?: unknown;
+      review?: unknown;
+      reason?: unknown;
+      category?: unknown;
+      redone?: unknown;
+    } | null;
+    return (
+      !!n &&
+      typeof n.note === "string" &&
+      typeof n.review === "boolean" &&
+      (n.reason === undefined || n.reason === "hint" || n.reason === "solution") &&
+      (n.category === undefined || (typeof n.category === "string" && n.category.length <= 80)) &&
+      (n.redone === undefined ||
+        (Array.isArray(n.redone) &&
+          n.redone.length <= 400 &&
+          n.redone.every((d) => typeof d === "string" && DATE.test(d))))
+    );
   }
   return true;
 }
@@ -252,7 +281,15 @@ function toDb(
         deleted: false,
       };
     case "notes":
-      return { ...base, note: v.note, needs_review: v.review, deleted: false };
+      return {
+        ...base,
+        note: v.note,
+        needs_review: v.review,
+        review_reason: v.reason ?? null,
+        category: v.category ?? null,
+        redone: v.redone ?? null,
+        deleted: false,
+      };
     default:
       return { ...base, value: v, deleted: false };
   }

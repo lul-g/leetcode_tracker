@@ -28,6 +28,8 @@ export type CatalogEntry = {
   d: 1 | 2 | 3;
   /** premium: can't be opened on LeetCode without a subscription */
   p?: boolean;
+  /** LeetCode's topic tags (Array, Hash Table, ...) */
+  g?: string[];
 };
 
 /** A problem you logged by hand, e.g. one you solved on NeetCode that LeetCode locks behind premium. */
@@ -51,6 +53,8 @@ export type ProblemRecord = {
   title: string;
   difficulty: Difficulty;
   topic: string;
+  /** LeetCode's own topic tags */
+  tags: string[];
   lists: string[];
   /** every submission to the problem, oldest first */
   subs: Pick<Sub, "t" | "ok" | "lang" | "rt">[];
