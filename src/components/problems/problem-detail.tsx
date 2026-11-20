@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo } from "react";
 import { CalendarClock, ExternalLink, Trash2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -229,6 +230,13 @@ export function ProblemDetail({
           />
         </section>
 
+
+        <Link
+          href="/topics"
+          className="inline-block text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+        >
+          See all of {problem.topic}
+        </Link>
       </div>
     </div>
   );

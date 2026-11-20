@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ListFilter } from "lucide-react";
+import { ListFilter, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -140,11 +140,19 @@ export function ProblemFilters({
 
   return (
     <Popover>
-      <PopoverTrigger render={<Button variant="outline" size="sm" className="h-9" />}>
-        <ListFilter data-icon="inline-start" />
-        Filter
+      <PopoverTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={n > 0 ? `Filters (${n} on)` : "Filters"}
+            className={cn("relative text-muted-foreground hover:text-foreground", n > 0 && "text-primary")}
+          />
+        }
+      >
+        <ListFilter />
         {n > 0 && (
-          <span className="ml-0.5 grid min-w-4 place-items-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground tabular-nums">
+          <span className="absolute -top-1 -right-1 grid min-w-4 place-items-center rounded-full bg-primary px-1 text-[10px] leading-4 font-semibold text-primary-foreground tabular-nums">
             {n}
           </span>
         )}
@@ -256,5 +264,70 @@ export function ProblemFilters({
         )}
       </PopoverContent>
     </Popover>
+  );
+}
+
+const REVIEW_LABEL = { any: "Needs review", hint: "Used hints", solution: "Saw the solution" } as const;
+
+/** The filters that are on, as chips you can remove one by one. */
+export function ActiveFilters({
+  filters,
+  onChange,
+  difficulty,
+  onDifficulty,
+}: {
+  filters: Filters;
+  onChange: (f: Filters) => void;
+  difficulty: Difficulty | null;
+  onDifficulty: (d: Difficulty | null) => void;
+}) {
+  const chips: { key: string; label: string; tone?: string; remove: () => void }[] = [];
+  if (difficulty) {
+    const d = DIFFICULTIES.find((x) => x.id === difficulty)!;
+    chips.push({ key: "d", label: d.label, tone: DIFF_TEXT[difficulty], remove: () => onDifficulty(null) });
+  }
+  if (filters.review)
+    chips.push({ key: "r", label: REVIEW_LABEL[filters.review], remove: () => onChange({ ...filters, review: null }) });
+  for (const c of filters.categories)
+    chips.push({ key: `c-${c}`, label: c, remove: () => onChange({ ...filters, categories: filters.categories.filter((x) => x !== c) }) });
+  for (const t of filters.tags)
+    chips.push({ key: `t-${t}`, label: t, remove: () => onChange({ ...filters, tags: filters.tags.filter((x) => x !== t) }) });
+  if (filters.hasNotes) chips.push({ key: "n", label: "Has notes", remove: () => onChange({ ...filters, hasNotes: false }) });
+  if (filters.source)
+    chips.push({
+      key: "s",
+      label: filters.source === "manual" ? "Logged by hand" : "From LeetCode",
+      remove: () => onChange({ ...filters, source: null }),
+    });
+  if (!chips.length) return null;
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {chips.map((c) => (
+        <button
+          key={c.key}
+          type="button"
+          onClick={c.remove}
+          aria-label={`Remove filter ${c.label}`}
+          className={cn(
+            "group inline-flex h-6 items-center gap-1 rounded-full border bg-muted/50 pr-1.5 pl-2.5 text-xs font-medium hover:bg-muted",
+            c.tone,
+          )}
+        >
+          {c.label}
+          <X className="size-3 opacity-50 group-hover:opacity-100" />
+        </button>
+      ))}
+      <button
+        type="button"
+        onClick={() => {
+          onChange({ ...NO_FILTERS, sort: filters.sort });
+          onDifficulty(null);
+        }}
+        className="px-1 text-xs text-muted-foreground hover:text-foreground"
+      >
+        Clear all
+      </button>
+    </div>
   );
 }

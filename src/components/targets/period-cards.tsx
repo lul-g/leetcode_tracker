@@ -30,7 +30,7 @@ import {
 } from "@/lib/periods";
 import { cn } from "@/lib/utils";
 
-/** Props every period card takes. `showSwitch` is false on the Targets page, which has one switch for all. */
+/** Props every period card takes. `showSwitch` hides the card's own period switch when something else provides one. */
 export type PeriodCardProps = {
   solves: Solve[];
   settings: GoalSettings;

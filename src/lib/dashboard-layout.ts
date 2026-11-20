@@ -1,11 +1,8 @@
 "use client";
 
-import { useCallback, useMemo, useSyncExternalStore } from "react";
-
 /**
  * Which cards the dashboard shows, in what order and size. Kept in this browser and synced with the
- * rest of your data (the "layout" row). The dashboard grid and the "add to dashboard" buttons on
- * other pages both go through here, so they always agree.
+ * rest of your data (the "layout" row). The dashboard grid reads and writes it through here.
  */
 export type LayoutItem = { id: string; w: number; h: number };
 
@@ -85,24 +82,4 @@ export function persistLayout(items: LayoutItem[] | null) {
     else localStorage.removeItem(KEY);
   } catch {}
   window.dispatchEvent(new Event(EVENT));
-}
-
-const parse = (raw: string | null, ids: string[]) => {
-  try {
-    return normalize(raw ? JSON.parse(raw) : null, ids);
-  } catch {
-    return normalize(null, ids);
-  }
-};
-
-/** Is this card on the dashboard, and a way to put it there or take it off. */
-export function useDashboardCard(id: string, allIds: string[]) {
-  const raw = useSyncExternalStore(layoutSubscribe, layoutRead, () => null);
-  const key = allIds.join("|");
-  const items = useMemo(() => parse(raw, key.split("|")), [raw, key]);
-  const on = items.some((x) => x.id === id);
-  const toggle = useCallback(() => {
-    persistLayout(on ? items.filter((x) => x.id !== id) : [...items, { id, ...sizeOf(id) }]);
-  }, [on, items, id]);
-  return { on, toggle };
 }

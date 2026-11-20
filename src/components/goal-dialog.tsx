@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import type { GoalSettings } from "@/lib/pace";
+import { autoWeeklyGoal } from "@/lib/periods";
 
 export function SettingsDialog({
   open,
@@ -85,17 +86,29 @@ function GoalForm({
   const [start, setStart] = useState(settings.startDate);
   const [target, setTarget] = useState(settings.targetDate);
 
+  const [weekly, setWeekly] = useState(settings.weeklyGoal ? String(settings.weeklyGoal) : "");
+
   const goalN = Number(goal);
   const goalOk = Number.isInteger(goalN) && goalN > 0;
   const datesOk = Boolean(start && target && target > start);
-  const valid = goalOk && datesOk;
+  const weeklyN = Number(weekly);
+  // blank means "work it out from the goal"
+  const weeklyOk = weekly.trim() === "" || (Number.isInteger(weeklyN) && weeklyN >= 1 && weeklyN <= 500);
+  const valid = goalOk && datesOk && weeklyOk;
+  const suggested = goalOk && datesOk ? autoWeeklyGoal({ goal: goalN, startDate: start, targetDate: target }) : null;
 
   return (
     <form
       className="flex flex-col gap-4"
       onSubmit={(e) => {
         e.preventDefault();
-        if (valid) onSave({ goal: goalN, startDate: start, targetDate: target });
+        if (valid)
+          onSave({
+            goal: goalN,
+            startDate: start,
+            targetDate: target,
+            weeklyGoal: weekly.trim() === "" ? null : weeklyN,
+          });
       }}
     >
       <FieldGroup>
@@ -122,6 +135,26 @@ function GoalForm({
             <DatePicker id="target" value={target} onChange={setTarget} min={start} />
           </Field>
         </div>
+        <Field data-invalid={!weeklyOk}>
+          <FieldLabel htmlFor="weekly">Weekly goal</FieldLabel>
+          <Input
+            id="weekly"
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={500}
+            value={weekly}
+            placeholder={suggested ? String(suggested) : "Auto"}
+            aria-invalid={!weeklyOk}
+            onChange={(e) => setWeekly(e.target.value)}
+            className="[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+          />
+          <FieldDescription>
+            {suggested
+              ? `Problems per week, Monday to Friday. Leave blank to use ${suggested} (your goal spread over the work days). Drives the week, month, quarter and 6-month bars.`
+              : "Problems per week, Monday to Friday."}
+          </FieldDescription>
+        </Field>
         <FieldDescription>
           {datesOk
             ? "Only solves on or after the start date count."

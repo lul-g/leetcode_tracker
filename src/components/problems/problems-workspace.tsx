@@ -9,9 +9,8 @@ import { PersistedPanels } from "@/components/persisted-panels";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useApp } from "@/lib/app-context";
-import { DIFFICULTIES, type Difficulty } from "@/lib/data";
+import { DIFFICULTIES } from "@/lib/data";
 import { addDays } from "@/lib/pace";
 import type { Problem } from "@/lib/problems";
 import { useNotes } from "@/lib/use-notes";
@@ -20,6 +19,7 @@ import { cn } from "@/lib/utils";
 import { categoryOf } from "@/lib/categories";
 import { DIFF_BG, DIFF_TEXT, DetailEmpty, ProblemDetail } from "./problem-detail";
 import {
+  ActiveFilters,
   NO_FILTERS,
   ProblemFilters,
   REDO_LABELS,
@@ -143,45 +143,34 @@ export function ProblemsWorkspace() {
           </Button>
           <ListSwitcher value={listId} onChange={setListId} lists={lists} />
         </div>
-        <div className="flex items-center gap-2">
-          <div className="relative min-w-0 flex-1">
-            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              type="search"
-              placeholder="Search"
-              aria-label="Search problems"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className="h-9 pl-9"
+        <div className="relative">
+          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            type="search"
+            placeholder="Search problems"
+            aria-label="Search problems"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="h-10 rounded-xl bg-muted/40 pr-12 pl-9 [&::-webkit-search-cancel-button]:appearance-none"
+          />
+          {/* the filter button lives inside the field, like a modern search bar */}
+          <div className="absolute top-1/2 right-1.5 -translate-y-1/2 border-l pl-1">
+            <ProblemFilters
+              problems={inList}
+              notes={notes.all}
+              filters={filters}
+              onChange={setFilters}
+              difficulty={difficulty}
+              onDifficulty={setDifficulty}
             />
           </div>
-          <ToggleGroup
-            value={difficulty ? [difficulty] : []}
-            onValueChange={(v) => setDifficulty((v[0] as Difficulty | undefined) ?? null)}
-            variant="outline"
-            size="sm"
-            aria-label="Filter by difficulty"
-          >
-            {DIFFICULTIES.map((d) => (
-              <ToggleGroupItem
-                key={d.id}
-                value={d.id}
-                aria-label={d.label}
-                className={cn("px-2.5 text-xs font-semibold", DIFF_TEXT[d.id])}
-              >
-                {d.short}
-              </ToggleGroupItem>
-            ))}
-          </ToggleGroup>
-          <ProblemFilters
-            problems={inList}
-            notes={notes.all}
-            filters={filters}
-            onChange={setFilters}
-            difficulty={difficulty}
-            onDifficulty={setDifficulty}
-          />
         </div>
+        <ActiveFilters
+          filters={filters}
+          onChange={setFilters}
+          difficulty={difficulty}
+          onDifficulty={setDifficulty}
+        />
       </header>
 
       <div className="min-h-0 flex-1 overflow-y-auto pb-6">
